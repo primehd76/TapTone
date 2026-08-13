@@ -16,9 +16,7 @@
             <div class="panel-content">
                 <label>Active Profile:</label>
                 <div class="profile-group">
-                    <select id="profile-select">
-                        <!-- Otomatis diisi oleh backend -->
-                    </select>
+                    <select id="profile-select"></select>
                     <button id="btn-new-profile" title="New Profile" class="icon-btn">➕</button>
                     <button id="btn-del-profile" title="Delete Profile" class="icon-btn danger">🗑️</button>
                 </div>
@@ -28,14 +26,12 @@
                     <button id="btn-upload-sound" class="action-btn">+ Upload</button>
                     <input type="file" id="file-upload-input" accept=".wav" style="display: none;">
                 </div>
-
-                <!-- TAMBAHKAN KODE INI TEPAT DI BAWAH LIBRARY HEADER -->
+                
                 <div id="upload-progress-container" style="display: none;">
                     <div id="upload-progress-bar"></div>
                 </div>
-                <!-- ------------------------------------------------ -->
-
-                <ul id="audio-list" class="file-list">
+                
+                <ul id="audio-list" class="file-list"></ul>
             </div>
         </aside>
 
@@ -52,9 +48,7 @@
             </div>
 
             <div class="main-content">
-                <div class="grid-container" id="sound-grid">
-                    <!-- Grid generated via JS -->
-                </div>
+                <div class="grid-container" id="sound-grid"></div>
             </div>
 
             <!-- PANEL BAWAH -->
@@ -69,17 +63,29 @@
                             <option value="blank">Blank / None</option>
                             <option value="play_sound">Play Sound</option>
                             <option value="stop_all">Stop All Sounds</option>
+                            <option value="next_page">Next Page</option>
+                            <option value="prev_page">Previous Page</option>
                         </select>
                     </div>
+                    
                     <div class="config-col">
                         <h4>Appearance</h4>
+                        <label>Display Mode:</label>
+                        <select id="select-display-mode">
+                            <option value="text">Text Only</option>
+                            <option value="image">Image Background</option>
+                        </select>
                         <label>Background Color:</label>
                         <input type="color" id="input-bg-color" value="#2a2d3e">
                     </div>
+
                     <div class="config-col">
                         <h4>Audio & Hardware</h4>
                         <label>Sound File:</label>
-                        <input type="text" id="input-sound-file" placeholder="Drag file here or type..." readonly>
+                        <div class="midi-group">
+                            <input type="text" id="input-sound-file" placeholder="Drag file here..." readonly>
+                            <button id="btn-clear-sound" class="action-btn danger">Clear</button>
+                        </div>
                         <label>MIDI Assignment:</label>
                         <div class="midi-group">
                             <input type="text" id="input-midi" placeholder="Click to assign..." readonly>

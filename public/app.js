@@ -27,7 +27,8 @@ function initButtonStates() {
                     action: "blank", 
                     file: "", 
                     midiNote: "", 
-                    bgColor: "#2a2d3e" 
+                    bgColor: "#2a2d3e",
+                    displayMode: "text"
                 };
             }
         }
@@ -65,7 +66,6 @@ function renderGrid() {
             button.appendChild(span);
             gridContainer.appendChild(button);
             
-            // Mouse click handler
             button.addEventListener('mousedown', () => {
                 if (isEditMode) {
                     openConfigForButton(btnId, pageOfThisButton);
@@ -74,7 +74,6 @@ function renderGrid() {
                 }
             });
 
-            // Drag & Drop handler directly to grid button
             button.addEventListener('dragover', (e) => {
                 if (isEditMode) e.preventDefault();
             });
@@ -87,7 +86,8 @@ function renderGrid() {
                     buttonState[pageOfThisButton][btnId].action = "play_sound";
                     
                     if (buttonState[pageOfThisButton][btnId].name === "Empty") {
-                        buttonState[pageOfThisButton][btnId].name = file.replace('.wav', '');
+                        const cleanName = file.replace('.wav', '');
+                        buttonState[pageOfThisButton][btnId].name = cleanName;
                     }
                     
                     renderGrid();
@@ -137,10 +137,12 @@ async function fetchLibrary() {
         
         const btnRename = document.createElement('button');
         btnRename.innerText = '✏️';
+        btnRename.title = 'Rename File';
         btnRename.onclick = () => renameAudio(sound);
         
         const btnDel = document.createElement('button');
         btnDel.innerText = '❌';
+        btnDel.title = 'Delete File';
         btnDel.onclick = () => deleteAudio(sound);
         
         actions.appendChild(btnRename);
@@ -162,7 +164,7 @@ async function fetchLibrary() {
     });
 }
 
-// --- 4. PROFILE CRUD & 5-PAGE XML PARSING ---
+// --- 4. PROFILE CRUD & XML PARSING ---
 async function loadProfile(profileName) {
     document.getElementById('current-profile-name').innerText = profileName.replace('.xml', '');
     currentProfile = profileName;
@@ -190,6 +192,7 @@ async function loadProfile(profileName) {
                         action: b.Action ? b.Action[0].$.type : "blank",
                         file: (b.Action && b.Action[0].SoundFile) ? b.Action[0].SoundFile[0] : "",
                         bgColor: (b.Appearance && b.Appearance[0].BgColor) ? b.Appearance[0].BgColor[0] : "#2a2d3e",
+                        displayMode: (b.Appearance && b.Appearance[0].DisplayMode) ? b.Appearance[0].DisplayMode[0] : "text",
                         midiNote: (b.MidiMapping && b.MidiMapping[0].Note) ? b.MidiMapping[0].Note[0] : ""
                     };
                 }
@@ -236,7 +239,7 @@ async function saveProfileToAPI(profileName) {
                 $: { id: id },
                 Name: data.name,
                 Action: { $: { type: data.action }, SoundFile: data.file },
-                Appearance: { BgColor: data.bgColor },
+                Appearance: { BgColor: data.bgColor, DisplayMode: data.displayMode },
                 MidiMapping: { Note: data.midiNote }
             });
         });
@@ -257,8 +260,54 @@ async function saveProfileToAPI(profileName) {
     });
 }
 
-// --- 5. AUDIO FILES CRUD ---
+// --- 5. AUDIO FILES CRUD & UPLOAD PROGRESS ---
 document.getElementById('btn-upload-sound').addEventListener('click', () => document.getElementById('file-upload-input').click());
+document.getElementById('file-upload-input').addEventListener('change', (e) => {
+    if (!e.target.files.length) return;
+    
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressBar = document.getElementById('upload-progress-bar');
+    
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    btnSettings.innerText = "Uploading...";
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload', true);
+
+    xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            progressBar.style.width = percentComplete + '%';
+        }
+    };
+
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            fetchLibrary();
+        } else {
+            alert("Upload failed! Status: " + xhr.status);
+        }
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            e.target.value = '';
+            btnSettings.innerText = "💾 Save Profile & Exit";
+        }, 500);
+    };
+
+    xhr.onerror = () => {
+        alert("Upload error!");
+        progressContainer.style.display = 'none';
+        e.target.value = '';
+        btnSettings.innerText = "💾 Save Profile & Exit";
+    };
+
+    xhr.send(formData);
+});
 
 async function deleteAudio(filename) {
     if (!confirm(`Delete sound ${filename}?`)) return;
@@ -281,16 +330,14 @@ async function renameAudio(oldName) {
     fetchLibrary();
 }
 
-// --- 6. PLAYBACK ENGINE (ZERO-LATENCY WEB AUDIO API) ---
+// --- 6. PLAYBACK ENGINE ---
 async function preloadAudio(fileName) {
     if (audioBuffers[fileName]) return;
     try {
         const res = await fetch(`/assets/sounds/${fileName}`);
         const arrayBuffer = await res.arrayBuffer();
         audioBuffers[fileName] = await audioCtx.decodeAudioData(arrayBuffer);
-    } catch (e) { 
-        console.warn(`Skipping audio: ${fileName}`); 
-    }
+    } catch (e) { console.warn(`Skipping audio: ${fileName}`); }
 }
 
 function playAudio(fileName) {
@@ -298,20 +345,14 @@ function playAudio(fileName) {
         preloadAudio(fileName).then(() => playAudio(fileName));
         return;
     }
-    
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffers[fileName];
     source.connect(audioCtx.destination);
     source.start(0);
-    
     playingSources.push(source);
-    source.onended = () => {
-        playingSources = playingSources.filter(s => s !== source);
-    };
+    source.onended = () => playingSources = playingSources.filter(s => s !== source);
 }
 
 function stopAllAudio() {
@@ -325,17 +366,10 @@ function triggerButtonAction(id, page = activePage) {
     btn.classList.add('is-playing');
     setTimeout(() => btn.classList.remove('is-playing'), 250);
 
-    if (data.action === "play_sound" && data.file) {
-        playAudio(data.file);
-    } else if (data.action === "stop_all") {
-        stopAllAudio();
-    } else if (data.action === "next_page" && activePage < 5) { 
-        activePage++; 
-        renderGrid(); 
-    } else if (data.action === "prev_page" && activePage > 1) { 
-        activePage--; 
-        renderGrid(); 
-    }
+    if (data.action === "play_sound" && data.file) playAudio(data.file);
+    else if (data.action === "stop_all") stopAllAudio();
+    else if (data.action === "next_page" && activePage < 5) { activePage++; renderGrid(); }
+    else if (data.action === "prev_page" && activePage > 1) { activePage--; renderGrid(); }
 }
 
 // --- 7. EDIT MODE & BINDINGS ---
@@ -349,7 +383,9 @@ function openConfigForButton(id, page = activePage) {
     document.getElementById('input-btn-name').value = data.name === "Empty" ? "" : data.name;
     document.getElementById('select-action-type').value = data.action;
     document.getElementById('input-sound-file').value = data.file;
+    document.getElementById('select-display-mode').value = data.displayMode || "text";
     document.getElementById('input-bg-color').value = data.bgColor;
+    document.getElementById('input-midi').value = data.midiNote || "";
 }
 
 document.getElementById('input-btn-name').addEventListener('input', (e) => {
@@ -363,12 +399,33 @@ document.getElementById('select-action-type').addEventListener('change', (e) => 
     if (activeConfigId) buttonState[activePage][activeConfigId].action = e.target.value;
 });
 
+document.getElementById('select-display-mode').addEventListener('change', (e) => {
+    if (activeConfigId) buttonState[activePage][activeConfigId].displayMode = e.target.value;
+});
+
 document.getElementById('input-bg-color').addEventListener('input', (e) => {
     if (!activeConfigId) return;
     buttonState[activePage][activeConfigId].bgColor = e.target.value;
     document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
 
+// Clear Sound File Button
+document.getElementById('btn-clear-sound').addEventListener('click', () => {
+    if (!activeConfigId) return;
+    buttonState[activePage][activeConfigId].file = "";
+    buttonState[activePage][activeConfigId].action = "blank";
+    document.getElementById('input-sound-file').value = "";
+    document.getElementById('select-action-type').value = "blank";
+});
+
+// Clear MIDI Button
+document.getElementById('btn-clear-midi').addEventListener('click', () => {
+    if (!activeConfigId) return;
+    buttonState[activePage][activeConfigId].midiNote = "";
+    document.getElementById('input-midi').value = "";
+});
+
+// Drag & Drop
 const dropZone = document.getElementById('input-sound-file');
 dropZone.addEventListener('dragover', e => e.preventDefault());
 dropZone.addEventListener('drop', e => {
