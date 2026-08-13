@@ -66,7 +66,7 @@ body {
 
 #btn-settings:hover { background: #3a3d52; }
 
-/* --- MAIN CONTENT & GRID KOTAK --- */
+/* --- MAIN CONTENT & GRID FIX --- */
 .main-content {
     flex-grow: 1;
     display: flex;
@@ -74,22 +74,26 @@ body {
     align-items: center;
     padding: 2vmin;
     background: radial-gradient(circle at center, #1e1e2e, #0f0f15);
-    /* Mengisi sisa ruang dinamis */
-    height: calc(100vh - 60px); 
-    transition: height 0.3s ease;
+    /* KUNCI FIX: min-height 0 mencegah konten membesar melewati flex container */
+    min-height: 0; 
 }
 
 .grid-container {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(3, 1fr);
     gap: 1.5vmin;
-    /* TRIK KOTAK: Membatasi lebar grid berdasarkan tinggi maksimal yang tersedia agar tidak melar */
     width: 100%;
-    max-width: calc((100vh - 60px - 4vmin) * (5/3)); 
+    max-width: 100%;
+    max-height: 100%;
+    /* KUNCI FIX: Container dipaksa berasio 5:3, otomatis isinya jadi kotak! */
+    aspect-ratio: 5 / 3; 
 }
 
 .sound-btn {
-    aspect-ratio: 1 / 1; /* MEMAKSA BENTUK KOTAK SEMPURNA */
+    /* aspect-ratio dihapus dari sini agar tidak konflik */
+    width: 100%;
+    height: 100%;
     background: linear-gradient(145deg, #2a2d3e, #1f2231);
     border: 1px solid #3a3d52;
     border-bottom: clamp(3px, 0.8vh, 6px) solid #15161d;
@@ -105,6 +109,15 @@ body {
     text-align: center;
     padding: 1vmin;
     box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+}
+
+/* Tambahan agar tombol Save terlihat jelas */
+#btn-settings.save-mode {
+    background: #00ff88;
+    color: #000;
+    font-weight: bold;
+    border-color: #00ff88;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
 }
 
 .sound-btn:hover { color: #ffffff; background: #33364a; }
