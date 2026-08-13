@@ -22,23 +22,15 @@ function showToast(message, isError = false) {
     toast.className = isError ? 'toast error' : 'toast';
     toast.innerHTML = isError ? `🚨 ${message}` : `✅ ${message}`;
     container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
 }
 
-// --- 1. MIDI ENGINE INIT & HOTPLUG ---
-if (navigator.requestMIDIAccess) {
-    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
-} else {
-    midiBadge.innerText = "❌ Web MIDI Not Supported";
-}
+// --- 1. MIDI ENGINE ---
+if (navigator.requestMIDIAccess) navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
+else midiBadge.innerText = "❌ Web MIDI Not Supported";
 
 function onMIDISuccess(midiAccess) {
     updateMIDIStatus(midiAccess);
-    
-    // Deteksi kabel dicabut / dicolok real-time
     midiAccess.onstatechange = (e) => {
         updateMIDIStatus(midiAccess);
         if (e.port.type === 'input') {
@@ -61,11 +53,9 @@ function updateMIDIStatus(midiAccess) {
             input.onmidimessage = handleMIDIMessage;
         }
     }
-
     if (activeInputs.length > 0) {
         midiBadge.className = "badge success";
-        let deviceName = activeInputs.length > 1 ? `${activeInputs.length} Devices` : activeInputs[0];
-        midiBadge.innerText = `🟢 MIDI: ${deviceName}`;
+        midiBadge.innerText = `🟢 MIDI: ${activeInputs.length > 1 ? activeInputs.length + ' Devices' : activeInputs[0]}`;
     } else {
         midiBadge.className = "badge danger";
         midiBadge.innerText = `🔴 MIDI: Not Connected`;
@@ -76,26 +66,16 @@ function handleMIDIMessage(message) {
     const command = message.data[0];
     const note = message.data[1];
     const velocity = (message.data.length > 2) ? message.data[2] : 0;
-
-    // Menampilkan log di Inspect Element (F12) biar gampang ngecek data yang masuk
-    console.log(`[MIDI IN] Command: ${command}, Note: ${note}, Velocity: ${velocity}`);
-
-    // Mendeteksi Note On di SEMUA Channel (144 = Ch 1, 159 = Ch 16)
-    const isNoteOn = (command >= 144 && command <= 159);
-
-    // Mengeksekusi hanya jika tombol dipencet (velocity > 0), bukan saat dilepas
-    if (isNoteOn && velocity > 0) { 
+    
+    // Support all channels (144 - 159)
+    if (command >= 144 && command <= 159 && velocity > 0) { 
         if (isEditMode && activeConfigId) {
-            // MODE ASSIGN
             document.getElementById('input-midi').value = note;
             buttonState[activePage][activeConfigId].midiNote = note;
             showToast(`MIDI Assigned: Note ${note}`);
         } else {
-            // MODE PLAY
             Object.keys(buttonState[activePage]).forEach(id => {
-                if (buttonState[activePage][id].midiNote == note) {
-                    triggerButtonAction(id, activePage);
-                }
+                if (buttonState[activePage][id].midiNote == note) triggerButtonAction(id, activePage);
             });
         }
     }
@@ -109,10 +89,7 @@ function initButtonStates() {
         for (let row = 1; row <= 3; row++) {
             for (let col = 1; col <= 5; col++) {
                 const btnId = `${row}_${col}`;
-                buttonState[p][btnId] = { 
-                    name: "Empty", action: "blank", file: "", midiNote: "", 
-                    bgColor: "#2a2d3e", fontColor: "#ffffff", displayMode: "text", icon: "🔥"
-                };
+                buttonState[p][btnId] = { name: "Empty", action: "blank", file: "", midiNote: "", bgColor: "#2a2d3e", fontColor: "#ffffff", displayMode: "text", icon: "🔥" };
             }
         }
     }
@@ -169,7 +146,6 @@ function renderGrid() {
                     const file = e.dataTransfer.getData('text/plain');
                     buttonState[pageOfThisButton][btnId].file = file;
                     buttonState[pageOfThisButton][btnId].action = "play_sound";
-                    
                     if (buttonState[pageOfThisButton][btnId].name === "Empty") {
                         buttonState[pageOfThisButton][btnId].name = file.replace('.wav', '');
                     }
@@ -184,7 +160,6 @@ function renderGrid() {
 document.getElementById('btn-next-page').addEventListener('click', () => {
     if (activePage < 5) { activePage++; renderGrid(); if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage); }
 });
-
 document.getElementById('btn-prev-page').addEventListener('click', () => {
     if (activePage > 1) { activePage--; renderGrid(); if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage); }
 });
@@ -207,14 +182,8 @@ async function fetchLibrary() {
         
         const actions = document.createElement('div');
         actions.className = 'file-actions';
-        
-        const btnRename = document.createElement('button');
-        btnRename.innerText = '✏️';
-        btnRename.onclick = () => renameAudio(sound);
-        
-        const btnDel = document.createElement('button');
-        btnDel.innerText = '❌';
-        btnDel.onclick = () => deleteAudio(sound);
+        const btnRename = document.createElement('button'); btnRename.innerText = '✏️'; btnRename.onclick = () => renameAudio(sound);
+        const btnDel = document.createElement('button'); btnDel.innerText = '❌'; btnDel.onclick = () => deleteAudio(sound);
         
         actions.appendChild(btnRename);
         actions.appendChild(btnDel);
@@ -226,14 +195,13 @@ async function fetchLibrary() {
     profileSelect.innerHTML = '';
     data.profiles.forEach(prof => {
         const opt = document.createElement('option');
-        opt.value = prof;
-        opt.innerText = prof;
+        opt.value = prof; opt.innerText = prof;
         if (prof === currentProfile) opt.selected = true;
         profileSelect.appendChild(opt);
     });
 }
 
-// --- 5. PROFILE CRUD & XML PARSING ---
+// --- 5. PROFILE CRUD (NEW, RENAME, DELETE, SAVE AS) ---
 async function loadProfile(profileName) {
     document.getElementById('current-profile-name').innerText = profileName.replace('.xml', '');
     currentProfile = profileName;
@@ -273,10 +241,33 @@ document.getElementById('btn-new-profile').addEventListener('click', async () =>
     let name = prompt("Enter new profile name (without .xml):");
     if (!name) return;
     name = name.trim() + '.xml';
+    
+    currentProfile = name;
+    document.getElementById('current-profile-name').innerText = name.replace('.xml', '');
+    
+    // WIPE GRID COMPLETELY TO BLANK
+    initButtonStates();
+    renderGrid();
+    
     await saveProfileToAPI(name);
     await fetchLibrary();
     profileSelect.value = name;
-    loadProfile(name);
+    showToast(`New Profile ${name} Created (Blank Slate)`);
+});
+
+document.getElementById('btn-rename-profile').addEventListener('click', async () => {
+    if (currentProfile === 'default.xml') return alert("Cannot rename default profile.");
+    let newName = prompt("Enter new name for profile:", currentProfile.replace('.xml', ''));
+    if (!newName || newName === currentProfile.replace('.xml', '')) return;
+    newName = newName.trim() + '.xml';
+
+    await fetch('/api/rename-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldName: currentProfile, newName }) });
+    
+    currentProfile = newName;
+    document.getElementById('current-profile-name').innerText = newName.replace('.xml', '');
+    await fetchLibrary();
+    profileSelect.value = currentProfile;
+    showToast(`Profile renamed to ${newName}`);
 });
 
 document.getElementById('btn-del-profile').addEventListener('click', async () => {
@@ -295,8 +286,7 @@ async function saveProfileToAPI(profileName) {
         Object.keys(buttonState[p]).forEach(id => {
             const data = buttonState[p][id];
             pageButtons.push({
-                $: { id: id },
-                Name: data.name,
+                $: { id: id }, Name: data.name,
                 Action: { $: { type: data.action }, SoundFile: data.file },
                 Appearance: { BgColor: data.bgColor, FontColor: data.fontColor, DisplayMode: data.displayMode, Icon: data.icon },
                 MidiMapping: { Note: data.midiNote }
@@ -304,7 +294,6 @@ async function saveProfileToAPI(profileName) {
         });
         pagesArray.push({ $: { index: p.toString() }, Button: pageButtons });
     }
-
     const profileData = { SoundboardProfile: { $: { name: profileName.replace('.xml', ''), is_readonly: profileName === 'default.xml' ? "true" : "false" }, Pages: { Page: pagesArray } } };
     await fetch('/api/save-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileName, data: profileData }) });
 }
@@ -313,39 +302,30 @@ async function saveProfileToAPI(profileName) {
 document.getElementById('btn-upload-sound').addEventListener('click', () => document.getElementById('file-upload-input').click());
 document.getElementById('file-upload-input').addEventListener('change', (e) => {
     if (!e.target.files.length) return;
-    const formData = new FormData();
-    formData.append('file', e.target.files[0]);
-    
+    const formData = new FormData(); formData.append('file', e.target.files[0]);
     const progressContainer = document.getElementById('upload-progress-container');
     const progressBar = document.getElementById('upload-progress-bar');
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
+    progressContainer.style.display = 'block'; progressBar.style.width = '0%';
     
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/upload', true);
-    xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) progressBar.style.width = ((event.loaded / event.total) * 100) + '%';
-    };
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) progressBar.style.width = ((event.loaded / event.total) * 100) + '%'; };
     xhr.onload = () => {
         if (xhr.status === 200) { fetchLibrary(); showToast("Upload Success!"); }
         setTimeout(() => { progressContainer.style.display = 'none'; e.target.value = ''; }, 500);
     };
     xhr.send(formData);
 });
-
 async function deleteAudio(filename) {
     if (!confirm(`Delete sound ${filename}?`)) return;
     await fetch('/api/delete-sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) });
-    showToast(`${filename} deleted`);
-    fetchLibrary();
+    showToast(`${filename} deleted`); fetchLibrary();
 }
-
 async function renameAudio(oldName) {
     let newName = prompt("Enter new filename:", oldName);
     if (!newName || newName === oldName) return;
     await fetch('/api/rename-sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldName, newName }) });
-    showToast(`Renamed to ${newName}`);
-    fetchLibrary();
+    showToast(`Renamed to ${newName}`); fetchLibrary();
 }
 
 // --- 7. PLAYBACK ENGINE ---
@@ -356,7 +336,6 @@ async function preloadAudio(fileName) {
         audioBuffers[fileName] = await audioCtx.decodeAudioData(await res.arrayBuffer());
     } catch (e) {}
 }
-
 function playAudio(fileName) {
     if (!audioBuffers[fileName]) { preloadAudio(fileName).then(() => playAudio(fileName)); return; }
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -367,18 +346,13 @@ function playAudio(fileName) {
     playingSources.push(source);
     source.onended = () => playingSources = playingSources.filter(s => s !== source);
 }
-
 function stopAllAudio() {
     playingSources.forEach(s => { try { s.stop(); } catch(e){} });
     playingSources = [];
 }
-
 function triggerButtonAction(id, page = activePage) {
-    const btn = document.getElementById(`btn_${id}`);
-    const data = buttonState[page][id];
-    btn.classList.add('is-playing');
-    setTimeout(() => btn.classList.remove('is-playing'), 250);
-
+    const btn = document.getElementById(`btn_${id}`); const data = buttonState[page][id];
+    btn.classList.add('is-playing'); setTimeout(() => btn.classList.remove('is-playing'), 250);
     if (data.action === "play_sound" && data.file) playAudio(data.file);
     else if (data.action === "stop_all") stopAllAudio();
     else if (data.action === "next_page" && activePage < 5) { activePage++; renderGrid(); }
@@ -390,7 +364,6 @@ function openConfigForButton(id, page = activePage) {
     activeConfigId = id;
     document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
     document.getElementById(`btn_${id}`).style.borderColor = '#00ff88';
-    
     const data = buttonState[page][id];
     document.getElementById('selected-btn-id').innerText = `(P${page} - ${id})`;
     document.getElementById('input-btn-name').value = data.name === "Empty" ? "" : data.name;
@@ -398,7 +371,6 @@ function openConfigForButton(id, page = activePage) {
     document.getElementById('input-sound-file').value = data.file;
     document.getElementById('select-display-mode').value = data.displayMode || "text";
     document.getElementById('select-stock-icon').value = data.icon || "🔥";
-    
     document.getElementById('icon-picker-container').style.display = data.displayMode === "icon" ? "block" : "none";
     document.getElementById('input-bg-color').value = data.bgColor || "#2a2d3e";
     document.getElementById('input-bg-hex').value = data.bgColor || "#2a2d3e";
@@ -407,80 +379,50 @@ function openConfigForButton(id, page = activePage) {
     document.getElementById('input-midi').value = data.midiNote || "";
 }
 
-// Bindings...
+// Inputs Bindings
 document.getElementById('input-btn-name').addEventListener('input', (e) => {
     if (!activeConfigId) return;
     const val = e.target.value || "Empty";
     buttonState[activePage][activeConfigId].name = val;
-    if (buttonState[activePage][activeConfigId].displayMode === "text") {
-        document.getElementById(`text_${activeConfigId}`).innerText = val;
-    }
+    if (buttonState[activePage][activeConfigId].displayMode === "text") document.getElementById(`text_${activeConfigId}`).innerText = val;
 });
-
 document.getElementById('select-action-type').addEventListener('change', (e) => { if (activeConfigId) buttonState[activePage][activeConfigId].action = e.target.value; });
 document.getElementById('select-display-mode').addEventListener('change', (e) => {
     if (!activeConfigId) return;
     const mode = e.target.value;
     buttonState[activePage][activeConfigId].displayMode = mode;
     document.getElementById('icon-picker-container').style.display = mode === "icon" ? "block" : "none";
-    
     const span = document.getElementById(`text_${activeConfigId}`);
-    if (mode === "icon") {
-        span.innerText = buttonState[activePage][activeConfigId].icon || "🔥";
-        span.style.fontSize = "32px";
-    } else {
-        const name = buttonState[activePage][activeConfigId].name;
-        span.innerText = name === "Empty" ? "Empty" : name;
-        span.style.fontSize = "";
-    }
+    if (mode === "icon") { span.innerText = buttonState[activePage][activeConfigId].icon || "🔥"; span.style.fontSize = "32px"; } 
+    else { const name = buttonState[activePage][activeConfigId].name; span.innerText = name === "Empty" ? "Empty" : name; span.style.fontSize = ""; }
 });
-
 document.getElementById('select-stock-icon').addEventListener('change', (e) => {
     if (!activeConfigId) return;
     buttonState[activePage][activeConfigId].icon = e.target.value;
-    if (buttonState[activePage][activeConfigId].displayMode === "icon") {
-        document.getElementById(`text_${activeConfigId}`).innerText = e.target.value;
-    }
+    if (buttonState[activePage][activeConfigId].displayMode === "icon") document.getElementById(`text_${activeConfigId}`).innerText = e.target.value;
 });
-
-// Color Sync
 document.getElementById('input-bg-color').addEventListener('input', (e) => {
-    if (!activeConfigId) return;
-    document.getElementById('input-bg-hex').value = e.target.value;
-    buttonState[activePage][activeConfigId].bgColor = e.target.value;
-    document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
+    if (!activeConfigId) return; document.getElementById('input-bg-hex').value = e.target.value;
+    buttonState[activePage][activeConfigId].bgColor = e.target.value; document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
 document.getElementById('input-bg-hex').addEventListener('input', (e) => {
-    if (!activeConfigId) return;
-    document.getElementById('input-bg-color').value = e.target.value;
-    buttonState[activePage][activeConfigId].bgColor = e.target.value;
-    document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
+    if (!activeConfigId) return; document.getElementById('input-bg-color').value = e.target.value;
+    buttonState[activePage][activeConfigId].bgColor = e.target.value; document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
 document.getElementById('input-font-color').addEventListener('input', (e) => {
-    if (!activeConfigId) return;
-    document.getElementById('input-font-hex').value = e.target.value;
-    buttonState[activePage][activeConfigId].fontColor = e.target.value;
-    document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
+    if (!activeConfigId) return; document.getElementById('input-font-hex').value = e.target.value;
+    buttonState[activePage][activeConfigId].fontColor = e.target.value; document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
 });
 document.getElementById('input-font-hex').addEventListener('input', (e) => {
-    if (!activeConfigId) return;
-    document.getElementById('input-font-color').value = e.target.value;
-    buttonState[activePage][activeConfigId].fontColor = e.target.value;
-    document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
+    if (!activeConfigId) return; document.getElementById('input-font-color').value = e.target.value;
+    buttonState[activePage][activeConfigId].fontColor = e.target.value; document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
 });
-
-// Clear Handlers
 document.getElementById('btn-clear-sound').addEventListener('click', () => {
-    if (!activeConfigId) return;
-    buttonState[activePage][activeConfigId].file = "";
-    buttonState[activePage][activeConfigId].action = "blank";
-    document.getElementById('input-sound-file').value = "";
-    document.getElementById('select-action-type').value = "blank";
+    if (!activeConfigId) return; buttonState[activePage][activeConfigId].file = ""; buttonState[activePage][activeConfigId].action = "blank";
+    document.getElementById('input-sound-file').value = ""; document.getElementById('select-action-type').value = "blank";
 });
 document.getElementById('btn-clear-midi').addEventListener('click', () => {
-    if (!activeConfigId) return;
-    buttonState[activePage][activeConfigId].midiNote = "";
-    document.getElementById('input-midi').value = "";
+    if (!activeConfigId) return; buttonState[activePage][activeConfigId].midiNote = ""; document.getElementById('input-midi').value = "";
 });
 
 // Dropzone
@@ -489,32 +431,41 @@ dropZone.addEventListener('dragover', e => e.preventDefault());
 dropZone.addEventListener('drop', e => {
     e.preventDefault();
     if (activeConfigId) {
-        const file = e.dataTransfer.getData('text/plain');
-        dropZone.value = file;
-        buttonState[activePage][activeConfigId].file = file;
-        buttonState[activePage][activeConfigId].action = "play_sound";
+        const file = e.dataTransfer.getData('text/plain'); dropZone.value = file;
+        buttonState[activePage][activeConfigId].file = file; buttonState[activePage][activeConfigId].action = "play_sound";
         document.getElementById('select-action-type').value = "play_sound";
-        
         if (buttonState[activePage][activeConfigId].name === "Empty") {
-            const cleanName = file.replace('.wav', '');
-            buttonState[activePage][activeConfigId].name = cleanName;
+            const cleanName = file.replace('.wav', ''); buttonState[activePage][activeConfigId].name = cleanName;
             document.getElementById('input-btn-name').value = cleanName;
-            if (buttonState[activePage][activeConfigId].displayMode === "text") {
-                document.getElementById(`text_${activeConfigId}`).innerText = cleanName;
-            }
+            if (buttonState[activePage][activeConfigId].displayMode === "text") document.getElementById(`text_${activeConfigId}`).innerText = cleanName;
         }
     }
 });
 
+// TOGGLE EDIT & SAVE AS LOGIC
 btnSettings.addEventListener('click', async () => {
-    isEditMode = !isEditMode;
-    if (isEditMode) {
+    if (!isEditMode) {
+        // ENTER EDIT MODE
+        isEditMode = true;
         document.body.classList.add('edit-mode');
         btnSettings.innerText = "💾 Save Profile & Exit";
         btnSettings.classList.add('save-mode');
     } else {
+        // EXIT & SAVE
+        if (currentProfile === 'default.xml') {
+            let newName = prompt("Default profile is read-only. Enter new profile name to Save As:");
+            if (!newName) return; // Batalkan save jika user klik cancel
+            currentProfile = newName.trim() + '.xml';
+            document.getElementById('current-profile-name').innerText = currentProfile.replace('.xml', '');
+        }
+
+        isEditMode = false;
         btnSettings.innerText = "Saving...";
         await saveProfileToAPI(currentProfile);
+        
+        await fetchLibrary(); // Refresh data supaya profile baru masuk list
+        profileSelect.value = currentProfile;
+        
         document.body.classList.remove('edit-mode');
         btnSettings.innerText = "⚙️ Edit Settings";
         btnSettings.classList.remove('save-mode');
