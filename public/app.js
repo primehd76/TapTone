@@ -49,7 +49,6 @@ function renderGrid() {
     for (let row = 1; row <= 3; row++) {
         for (let col = 1; col <= 5; col++) {
             const btnId = `${row}_${col}`;
-            // KUNCI PERBAIKAN: Tangkap nilai activePage saat ini ke dalam variabel konstan (closure)
             const pageOfThisButton = activePage; 
             const data = buttonState[pageOfThisButton][btnId];
             
@@ -66,12 +65,35 @@ function renderGrid() {
             button.appendChild(span);
             gridContainer.appendChild(button);
             
-            // Gunakan pageOfThisButton agar ID dan halamannya tidak tertukar saat dipencet
+            // Mouse click handler
             button.addEventListener('mousedown', () => {
                 if (isEditMode) {
                     openConfigForButton(btnId, pageOfThisButton);
                 } else {
                     triggerButtonAction(btnId, pageOfThisButton);
+                }
+            });
+
+            // Drag & Drop handler directly to grid button
+            button.addEventListener('dragover', (e) => {
+                if (isEditMode) e.preventDefault();
+            });
+
+            button.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (isEditMode) {
+                    const file = e.dataTransfer.getData('text/plain');
+                    buttonState[pageOfThisButton][btnId].file = file;
+                    buttonState[pageOfThisButton][btnId].action = "play_sound";
+                    
+                    if (buttonState[pageOfThisButton][btnId].name === "Empty") {
+                        buttonState[pageOfThisButton][btnId].name = file.replace('.wav', '');
+                    }
+                    
+                    renderGrid();
+                    if (activeConfigId === btnId) {
+                        openConfigForButton(btnId, pageOfThisButton);
+                    }
                 }
             });
         }
@@ -82,7 +104,7 @@ document.getElementById('btn-next-page').addEventListener('click', () => {
     if (activePage < 5) {
         activePage++;
         renderGrid();
-        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId);
+        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage);
     }
 });
 
@@ -90,7 +112,7 @@ document.getElementById('btn-prev-page').addEventListener('click', () => {
     if (activePage > 1) {
         activePage--;
         renderGrid();
-        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId);
+        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage);
     }
 });
 
@@ -152,7 +174,7 @@ async function loadProfile(profileName) {
     });
     const { status, data } = await res.json();
     
-    initButtonStates(); // Reset states
+    initButtonStates(); 
     
     if (status === 'success' && data.SoundboardProfile.Pages && data.SoundboardProfile.Pages[0].Page) {
         const pages = data.SoundboardProfile.Pages[0].Page;
@@ -259,24 +281,37 @@ async function renameAudio(oldName) {
     fetchLibrary();
 }
 
-// --- 6. PLAYBACK ENGINE ---
+// --- 6. PLAYBACK ENGINE (ZERO-LATENCY WEB AUDIO API) ---
 async function preloadAudio(fileName) {
     if (audioBuffers[fileName]) return;
     try {
         const res = await fetch(`/assets/sounds/${fileName}`);
-        audioBuffers[fileName] = await audioCtx.decodeAudioData(await res.arrayBuffer());
-    } catch (e) { console.warn(`Skipping missing audio: ${fileName}`); }
+        const arrayBuffer = await res.arrayBuffer();
+        audioBuffers[fileName] = await audioCtx.decodeAudioData(arrayBuffer);
+    } catch (e) { 
+        console.warn(`Skipping audio: ${fileName}`); 
+    }
 }
 
 function playAudio(fileName) {
-    if (!audioBuffers[fileName]) return;
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!audioBuffers[fileName]) {
+        preloadAudio(fileName).then(() => playAudio(fileName));
+        return;
+    }
+    
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffers[fileName];
     source.connect(audioCtx.destination);
     source.start(0);
+    
     playingSources.push(source);
-    source.onended = () => playingSources = playingSources.filter(s => s !== source);
+    source.onended = () => {
+        playingSources = playingSources.filter(s => s !== source);
+    };
 }
 
 function stopAllAudio() {
@@ -286,14 +321,21 @@ function stopAllAudio() {
 
 function triggerButtonAction(id, page = activePage) {
     const btn = document.getElementById(`btn_${id}`);
-    const data = buttonState[page][id]; // Mengambil data sesuai halaman tombol tersebut
+    const data = buttonState[page][id];
     btn.classList.add('is-playing');
     setTimeout(() => btn.classList.remove('is-playing'), 250);
 
-    if (data.action === "play_sound" && data.file) playAudio(data.file);
-    else if (data.action === "stop_all") stopAllAudio();
-    else if (data.action === "next_page" && activePage < 5) { activePage++; renderGrid(); }
-    else if (data.action === "prev_page" && activePage > 1) { activePage--; renderGrid(); }
+    if (data.action === "play_sound" && data.file) {
+        playAudio(data.file);
+    } else if (data.action === "stop_all") {
+        stopAllAudio();
+    } else if (data.action === "next_page" && activePage < 5) { 
+        activePage++; 
+        renderGrid(); 
+    } else if (data.action === "prev_page" && activePage > 1) { 
+        activePage--; 
+        renderGrid(); 
+    }
 }
 
 // --- 7. EDIT MODE & BINDINGS ---
@@ -302,7 +344,7 @@ function openConfigForButton(id, page = activePage) {
     document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
     document.getElementById(`btn_${id}`).style.borderColor = '#00ff88';
     
-    const data = buttonState[page][id]; // Mengambil data config sesuai halaman
+    const data = buttonState[page][id];
     document.getElementById('selected-btn-id').innerText = `(P${page} - ${id})`;
     document.getElementById('input-btn-name').value = data.name === "Empty" ? "" : data.name;
     document.getElementById('select-action-type').value = data.action;
@@ -323,7 +365,7 @@ document.getElementById('select-action-type').addEventListener('change', (e) => 
 
 document.getElementById('input-bg-color').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    buttonState[activeConfigId].bgColor = e.target.value;
+    buttonState[activePage][activeConfigId].bgColor = e.target.value;
     document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
 
@@ -337,6 +379,13 @@ dropZone.addEventListener('drop', e => {
         buttonState[activePage][activeConfigId].file = file;
         buttonState[activePage][activeConfigId].action = "play_sound";
         document.getElementById('select-action-type').value = "play_sound";
+        
+        if (buttonState[activePage][activeConfigId].name === "Empty") {
+            const cleanName = file.replace('.wav', '');
+            buttonState[activePage][activeConfigId].name = cleanName;
+            document.getElementById('input-btn-name').value = cleanName;
+            document.getElementById(`text_${activeConfigId}`).innerText = cleanName;
+        }
     }
 });
 
