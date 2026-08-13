@@ -13,8 +13,87 @@ const gridContainer = document.getElementById('sound-grid');
 const btnSettings = document.getElementById('btn-settings');
 const audioListUI = document.getElementById('audio-list');
 const profileSelect = document.getElementById('profile-select');
+const midiBadge = document.getElementById('midi-status-badge');
 
-// --- 1. INITIALIZATION & 5-PAGE STATES ---
+// --- 0. UI TOAST NOTIFICATION ---
+function showToast(message, isError = false) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = isError ? 'toast error' : 'toast';
+    toast.innerHTML = isError ? `🚨 ${message}` : `✅ ${message}`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// --- 1. MIDI ENGINE INIT & HOTPLUG ---
+if (navigator.requestMIDIAccess) {
+    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
+} else {
+    midiBadge.innerText = "❌ Web MIDI Not Supported";
+}
+
+function onMIDISuccess(midiAccess) {
+    updateMIDIStatus(midiAccess);
+    
+    // Deteksi kabel dicabut / dicolok real-time
+    midiAccess.onstatechange = (e) => {
+        updateMIDIStatus(midiAccess);
+        if (e.port.type === 'input') {
+            if (e.port.state === 'connected') showToast(`MIDI Connected: ${e.port.name}`);
+            else if (e.port.state === 'disconnected') showToast(`MIDI Disconnected: ${e.port.name}`, true);
+        }
+    };
+}
+
+function onMIDIFailure() { 
+    midiBadge.innerText = "❌ MIDI Access Denied";
+    showToast("Gagal mengakses perangkat MIDI", true);
+}
+
+function updateMIDIStatus(midiAccess) {
+    let activeInputs = [];
+    for (let input of midiAccess.inputs.values()) {
+        if (input.state === "connected") {
+            activeInputs.push(input.name);
+            input.onmidimessage = handleMIDIMessage;
+        }
+    }
+
+    if (activeInputs.length > 0) {
+        midiBadge.className = "badge success";
+        let deviceName = activeInputs.length > 1 ? `${activeInputs.length} Devices` : activeInputs[0];
+        midiBadge.innerText = `🟢 MIDI: ${deviceName}`;
+    } else {
+        midiBadge.className = "badge danger";
+        midiBadge.innerText = `🔴 MIDI: Not Connected`;
+    }
+}
+
+function handleMIDIMessage(message) {
+    const command = message.data[0];
+    const note = message.data[1];
+    const velocity = (message.data.length > 2) ? message.data[2] : 0;
+
+    if (command === 144 && velocity > 0) { // 144 = Note On
+        if (isEditMode && activeConfigId) {
+            document.getElementById('input-midi').value = note;
+            buttonState[activePage][activeConfigId].midiNote = note;
+            showToast(`MIDI Assigned: Note ${note}`);
+        } else {
+            // Loop untuk mencari tombol mana yang punya Note ini di Active Page
+            Object.keys(buttonState[activePage]).forEach(id => {
+                if (buttonState[activePage][id].midiNote == note) {
+                    triggerButtonAction(id, activePage);
+                }
+            });
+        }
+    }
+}
+
+// --- 2. INITIALIZATION & STATES ---
 function initButtonStates() {
     buttonState = {};
     for (let p = 1; p <= 5; p++) {
@@ -23,14 +102,8 @@ function initButtonStates() {
             for (let col = 1; col <= 5; col++) {
                 const btnId = `${row}_${col}`;
                 buttonState[p][btnId] = { 
-                    name: "Empty", 
-                    action: "blank", 
-                    file: "", 
-                    midiNote: "", 
-                    bgColor: "#2a2d3e",
-                    fontColor: "#ffffff",
-                    displayMode: "text",
-                    icon: "🔥"
+                    name: "Empty", action: "blank", file: "", midiNote: "", 
+                    bgColor: "#2a2d3e", fontColor: "#ffffff", displayMode: "text", icon: "🔥"
                 };
             }
         }
@@ -44,7 +117,7 @@ async function initApp() {
     await loadProfile(currentProfile);
 }
 
-// --- 2. GRID RENDERING & PAGE NAVIGATION ---
+// --- 3. GRID RENDERING & PAGE NAVIGATION ---
 function renderGrid() {
     gridContainer.innerHTML = ''; 
     document.getElementById('page-indicator').innerText = `Page ${activePage} / 5`;
@@ -65,10 +138,9 @@ function renderGrid() {
             span.className = 'btn-text';
             span.id = `text_${btnId}`;
             
-            // Render Text atau Stock Icon berdasarkan displayMode
             if (data.displayMode === "icon") {
                 span.innerText = data.icon || "🔥";
-                span.style.fontSize = "28px"; // Ukuran icon lebih besar
+                span.style.fontSize = "32px"; 
             } else {
                 span.innerText = data.name === "Empty" ? "Empty" : data.name;
                 span.style.fontSize = ""; 
@@ -78,11 +150,8 @@ function renderGrid() {
             gridContainer.appendChild(button);
             
             button.addEventListener('mousedown', () => {
-                if (isEditMode) {
-                    openConfigForButton(btnId, pageOfThisButton);
-                } else {
-                    triggerButtonAction(btnId, pageOfThisButton);
-                }
+                if (isEditMode) openConfigForButton(btnId, pageOfThisButton);
+                else triggerButtonAction(btnId, pageOfThisButton);
             });
 
             button.addEventListener('dragover', (e) => { if (isEditMode) e.preventDefault(); });
@@ -94,8 +163,7 @@ function renderGrid() {
                     buttonState[pageOfThisButton][btnId].action = "play_sound";
                     
                     if (buttonState[pageOfThisButton][btnId].name === "Empty") {
-                        const cleanName = file.replace('.wav', '');
-                        buttonState[pageOfThisButton][btnId].name = cleanName;
+                        buttonState[pageOfThisButton][btnId].name = file.replace('.wav', '');
                     }
                     renderGrid();
                     if (activeConfigId === btnId) openConfigForButton(btnId, pageOfThisButton);
@@ -106,22 +174,14 @@ function renderGrid() {
 }
 
 document.getElementById('btn-next-page').addEventListener('click', () => {
-    if (activePage < 5) {
-        activePage++;
-        renderGrid();
-        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage);
-    }
+    if (activePage < 5) { activePage++; renderGrid(); if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage); }
 });
 
 document.getElementById('btn-prev-page').addEventListener('click', () => {
-    if (activePage > 1) {
-        activePage--;
-        renderGrid();
-        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage);
-    }
+    if (activePage > 1) { activePage--; renderGrid(); if (activeConfigId && isEditMode) openConfigForButton(activeConfigId, activePage); }
 });
 
-// --- 3. FETCH LIBRARY & PROFILES ---
+// --- 4. FETCH LIBRARY & PROFILES ---
 async function fetchLibrary() {
     const res = await fetch('/api/library');
     const data = await res.json();
@@ -151,7 +211,6 @@ async function fetchLibrary() {
         actions.appendChild(btnRename);
         actions.appendChild(btnDel);
         wrap.appendChild(li);
-        wrap.appendChild(actions);
         audioListUI.appendChild(wrap);
         preloadAudio(sound);
     });
@@ -166,26 +225,20 @@ async function fetchLibrary() {
     });
 }
 
-// --- 4. PROFILE CRUD & XML PARSING ---
+// --- 5. PROFILE CRUD & XML PARSING ---
 async function loadProfile(profileName) {
     document.getElementById('current-profile-name').innerText = profileName.replace('.xml', '');
     currentProfile = profileName;
     
-    const res = await fetch('/api/load-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileName })
-    });
+    const res = await fetch('/api/load-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileName }) });
     const { status, data } = await res.json();
     
     initButtonStates(); 
     
     if (status === 'success' && data.SoundboardProfile.Pages && data.SoundboardProfile.Pages[0].Page) {
-        const pages = data.SoundboardProfile.Pages[0].Page;
-        pages.forEach(page => {
+        data.SoundboardProfile.Pages[0].Page.forEach(page => {
             const pageIndex = parseInt(page.$.index);
             const buttons = page.Button || [];
-            
             buttons.forEach(b => {
                 const id = b.$.id;
                 if (buttonState[pageIndex] && buttonState[pageIndex][id]) {
@@ -221,12 +274,7 @@ document.getElementById('btn-new-profile').addEventListener('click', async () =>
 document.getElementById('btn-del-profile').addEventListener('click', async () => {
     if (currentProfile === 'default.xml') return alert("Cannot delete default profile.");
     if (!confirm(`Delete profile ${currentProfile}?`)) return;
-    
-    await fetch('/api/delete-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileName: currentProfile })
-    });
+    await fetch('/api/delete-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileName: currentProfile }) });
     currentProfile = 'default.xml';
     await fetchLibrary();
     loadProfile(currentProfile);
@@ -242,33 +290,18 @@ async function saveProfileToAPI(profileName) {
                 $: { id: id },
                 Name: data.name,
                 Action: { $: { type: data.action }, SoundFile: data.file },
-                Appearance: { 
-                    BgColor: data.bgColor, 
-                    FontColor: data.fontColor,
-                    DisplayMode: data.displayMode,
-                    Icon: data.icon
-                },
+                Appearance: { BgColor: data.bgColor, FontColor: data.fontColor, DisplayMode: data.displayMode, Icon: data.icon },
                 MidiMapping: { Note: data.midiNote }
             });
         });
         pagesArray.push({ $: { index: p.toString() }, Button: pageButtons });
     }
 
-    const profileData = {
-        SoundboardProfile: {
-            $: { name: profileName.replace('.xml', ''), is_readonly: profileName === 'default.xml' ? "true" : "false" },
-            Pages: { Page: pagesArray }
-        }
-    };
-    
-    await fetch('/api/save-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileName, data: profileData })
-    });
+    const profileData = { SoundboardProfile: { $: { name: profileName.replace('.xml', ''), is_readonly: profileName === 'default.xml' ? "true" : "false" }, Pages: { Page: pagesArray } } };
+    await fetch('/api/save-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileName, data: profileData }) });
 }
 
-// --- 5. AUDIO FILES CRUD ---
+// --- 6. AUDIO FILES CRUD & UPLOAD ---
 document.getElementById('btn-upload-sound').addEventListener('click', () => document.getElementById('file-upload-input').click());
 document.getElementById('file-upload-input').addEventListener('change', (e) => {
     if (!e.target.files.length) return;
@@ -286,7 +319,7 @@ document.getElementById('file-upload-input').addEventListener('change', (e) => {
         if (event.lengthComputable) progressBar.style.width = ((event.loaded / event.total) * 100) + '%';
     };
     xhr.onload = () => {
-        if (xhr.status === 200) fetchLibrary();
+        if (xhr.status === 200) { fetchLibrary(); showToast("Upload Success!"); }
         setTimeout(() => { progressContainer.style.display = 'none'; e.target.value = ''; }, 500);
     };
     xhr.send(formData);
@@ -295,6 +328,7 @@ document.getElementById('file-upload-input').addEventListener('change', (e) => {
 async function deleteAudio(filename) {
     if (!confirm(`Delete sound ${filename}?`)) return;
     await fetch('/api/delete-sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) });
+    showToast(`${filename} deleted`);
     fetchLibrary();
 }
 
@@ -302,10 +336,11 @@ async function renameAudio(oldName) {
     let newName = prompt("Enter new filename:", oldName);
     if (!newName || newName === oldName) return;
     await fetch('/api/rename-sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldName, newName }) });
+    showToast(`Renamed to ${newName}`);
     fetchLibrary();
 }
 
-// --- 6. PLAYBACK ENGINE ---
+// --- 7. PLAYBACK ENGINE ---
 async function preloadAudio(fileName) {
     if (audioBuffers[fileName]) return;
     try {
@@ -342,7 +377,7 @@ function triggerButtonAction(id, page = activePage) {
     else if (data.action === "prev_page" && activePage > 1) { activePage--; renderGrid(); }
 }
 
-// --- 7. EDIT MODE & BINDINGS ---
+// --- 8. EDIT MODE & BINDINGS ---
 function openConfigForButton(id, page = activePage) {
     activeConfigId = id;
     document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
@@ -356,11 +391,7 @@ function openConfigForButton(id, page = activePage) {
     document.getElementById('select-display-mode').value = data.displayMode || "text";
     document.getElementById('select-stock-icon').value = data.icon || "🔥";
     
-    // Tampilkan/Sembunyikan Picker Icon
-    const iconContainer = document.getElementById('icon-picker-container');
-    iconContainer.style.display = data.displayMode === "icon" ? "block" : "none";
-
-    // Set Colors
+    document.getElementById('icon-picker-container').style.display = data.displayMode === "icon" ? "block" : "none";
     document.getElementById('input-bg-color').value = data.bgColor || "#2a2d3e";
     document.getElementById('input-bg-hex').value = data.bgColor || "#2a2d3e";
     document.getElementById('input-font-color').value = data.fontColor || "#ffffff";
@@ -368,7 +399,7 @@ function openConfigForButton(id, page = activePage) {
     document.getElementById('input-midi').value = data.midiNote || "";
 }
 
-// Real-time Inputs
+// Bindings...
 document.getElementById('input-btn-name').addEventListener('input', (e) => {
     if (!activeConfigId) return;
     const val = e.target.value || "Empty";
@@ -378,23 +409,17 @@ document.getElementById('input-btn-name').addEventListener('input', (e) => {
     }
 });
 
-document.getElementById('select-action-type').addEventListener('change', (e) => {
-    if (activeConfigId) buttonState[activePage][activeConfigId].action = e.target.value;
-});
-
+document.getElementById('select-action-type').addEventListener('change', (e) => { if (activeConfigId) buttonState[activePage][activeConfigId].action = e.target.value; });
 document.getElementById('select-display-mode').addEventListener('change', (e) => {
     if (!activeConfigId) return;
     const mode = e.target.value;
     buttonState[activePage][activeConfigId].displayMode = mode;
-    
-    const iconContainer = document.getElementById('icon-picker-container');
-    iconContainer.style.display = mode === "icon" ? "block" : "none";
+    document.getElementById('icon-picker-container').style.display = mode === "icon" ? "block" : "none";
     
     const span = document.getElementById(`text_${activeConfigId}`);
     if (mode === "icon") {
-        const icon = buttonState[activePage][activeConfigId].icon || "🔥";
-        span.innerText = icon;
-        span.style.fontSize = "28px";
+        span.innerText = buttonState[activePage][activeConfigId].icon || "🔥";
+        span.style.fontSize = "32px";
     } else {
         const name = buttonState[activePage][activeConfigId].name;
         span.innerText = name === "Empty" ? "Empty" : name;
@@ -404,46 +429,39 @@ document.getElementById('select-display-mode').addEventListener('change', (e) =>
 
 document.getElementById('select-stock-icon').addEventListener('change', (e) => {
     if (!activeConfigId) return;
-    const icon = e.target.value;
-    buttonState[activePage][activeConfigId].icon = icon;
+    buttonState[activePage][activeConfigId].icon = e.target.value;
     if (buttonState[activePage][activeConfigId].displayMode === "icon") {
-        document.getElementById(`text_${activeConfigId}`).innerText = icon;
+        document.getElementById(`text_${activeConfigId}`).innerText = e.target.value;
     }
 });
 
-// Background Color Synchronizer (Picker <-> Hex Input)
+// Color Sync
 document.getElementById('input-bg-color').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    const val = e.target.value;
-    document.getElementById('input-bg-hex').value = val;
-    buttonState[activePage][activeConfigId].bgColor = val;
-    document.getElementById(`btn_${activeConfigId}`).style.background = val;
+    document.getElementById('input-bg-hex').value = e.target.value;
+    buttonState[activePage][activeConfigId].bgColor = e.target.value;
+    document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
 document.getElementById('input-bg-hex').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    const val = e.target.value;
-    document.getElementById('input-bg-color').value = val;
-    buttonState[activePage][activeConfigId].bgColor = val;
-    document.getElementById(`btn_${activeConfigId}`).style.background = val;
+    document.getElementById('input-bg-color').value = e.target.value;
+    buttonState[activePage][activeConfigId].bgColor = e.target.value;
+    document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
-
-// Font Color Synchronizer (Picker <-> Hex Input)
 document.getElementById('input-font-color').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    const val = e.target.value;
-    document.getElementById('input-font-hex').value = val;
-    buttonState[activePage][activeConfigId].fontColor = val;
-    document.getElementById(`btn_${activeConfigId}`).style.color = val;
+    document.getElementById('input-font-hex').value = e.target.value;
+    buttonState[activePage][activeConfigId].fontColor = e.target.value;
+    document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
 });
 document.getElementById('input-font-hex').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    const val = e.target.value;
-    document.getElementById('input-font-color').value = val;
-    buttonState[activePage][activeConfigId].fontColor = val;
-    document.getElementById(`btn_${activeConfigId}`).style.color = val;
+    document.getElementById('input-font-color').value = e.target.value;
+    buttonState[activePage][activeConfigId].fontColor = e.target.value;
+    document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
 });
 
-// Clear Buttons
+// Clear Handlers
 document.getElementById('btn-clear-sound').addEventListener('click', () => {
     if (!activeConfigId) return;
     buttonState[activePage][activeConfigId].file = "";
@@ -451,14 +469,13 @@ document.getElementById('btn-clear-sound').addEventListener('click', () => {
     document.getElementById('input-sound-file').value = "";
     document.getElementById('select-action-type').value = "blank";
 });
-
 document.getElementById('btn-clear-midi').addEventListener('click', () => {
     if (!activeConfigId) return;
     buttonState[activePage][activeConfigId].midiNote = "";
     document.getElementById('input-midi').value = "";
 });
 
-// Drag & Drop
+// Dropzone
 const dropZone = document.getElementById('input-sound-file');
 dropZone.addEventListener('dragover', e => e.preventDefault());
 dropZone.addEventListener('drop', e => {
@@ -496,6 +513,7 @@ btnSettings.addEventListener('click', async () => {
         document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
         activeConfigId = null;
         renderGrid();
+        showToast("Profile Saved!");
     }
 });
 

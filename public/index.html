@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TapTone</title>
+    <title>TapTone - Broadcast Soundboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -43,7 +43,12 @@
                     <span id="page-indicator">Page 1 / 5</span>
                     <button id="btn-next-page" class="icon-btn">▶</button>
                 </div>
-                <span class="profile-title">Profile: <span id="current-profile-name">Loading...</span></span>
+                <!-- MIDI STATUS BADGE -->
+                <div id="midi-status-badge" class="badge danger">🔴 MIDI: Not Connected</div>
+                
+                <div style="flex-grow: 1; text-align: center;">
+                    <span class="profile-title">Profile: <span id="current-profile-name">Loading...</span></span>
+                </div>
                 <button id="btn-settings">⚙️ Edit Settings</button>
             </div>
 
@@ -75,8 +80,6 @@
                             <option value="text">Text Only</option>
                             <option value="icon">Stock Icon</option>
                         </select>
-
-                        <!-- Kontainer khusus untuk pilihan Icon jika Display Mode = Icon -->
                         <div id="icon-picker-container" style="display: none; margin-top: 8px;">
                             <label>Select Icon:</label>
                             <select id="select-stock-icon">
@@ -90,13 +93,11 @@
                                 <option value="💥">💥 Boom</option>
                             </select>
                         </div>
-
                         <label>Background Color (Hex/RGB):</label>
                         <div class="color-group">
                             <input type="color" id="input-bg-color" value="#2a2d3e">
                             <input type="text" id="input-bg-hex" placeholder="#2a2d3e">
                         </div>
-
                         <label>Font Color (Hex/RGB):</label>
                         <div class="color-group">
                             <input type="color" id="input-font-color" value="#ffffff">
@@ -121,6 +122,10 @@
             </section>
         </main>
     </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container"></div>
+
     <script src="app.js"></script>
 </body>
 </html>
