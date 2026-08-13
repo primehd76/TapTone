@@ -175,3 +175,18 @@ hr { border: 0; border-top: 1px solid #2a2d3e; margin: 20px 0; }
 .file-item { padding: 8px; background: #1e1e2e; margin-bottom: 5px; border-radius: 4px; cursor: grab; font-size: 13px; border: 1px solid transparent; }
 .file-item:hover { border-color: #00ff88; }
 .is-playing-list { color: #00ff88; font-weight: bold; border-left: 3px solid #00ff88; }
+
+/* --- TAMBAHAN STYLE CRUD --- */
+.profile-group { display: flex; gap: 5px; margin-bottom: 10px; }
+.profile-group select { flex-grow: 1; }
+.icon-btn { background: #3a3d52; border: none; color: white; padding: 0 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+.icon-btn:hover { background: #505470; }
+.icon-btn.danger:hover { background: #ff4757; }
+.library-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.file-item-wrapper { display: flex; justify-content: space-between; align-items: center; background: #1e1e2e; margin-bottom: 5px; border-radius: 4px; border: 1px solid transparent; }
+.file-item-wrapper:hover { border-color: #00ff88; }
+.file-item { padding: 8px; cursor: grab; font-size: 13px; flex-grow: 1; overflow: hidden; text-overflow: ellipsis; }
+.file-actions { display: flex; gap: 5px; padding-right: 5px; }
+.file-actions button { background: none; border: none; cursor: pointer; opacity: 0.6; transition: 0.2s; font-size: 14px; }
+.file-actions button:hover { opacity: 1; transform: scale(1.1); }
+
