@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  taptone:
+    build: .
+    container_name: TapTone
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+    restart: unless-stopped

@@ -1,0 +1,82 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    /* Prevent accidental text highlighting during live broadcast */
+    user-select: none; 
+}
+
+body {
+    background-color: #121212;
+    color: #ffffff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent scrollbars */
+}
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 25px;
+    background-color: #1e1e1e;
+    border-bottom: 2px solid #333;
+}
+
+#page-indicator {
+    font-size: 16px;
+    font-weight: bold;
+    color: #aaa;
+}
+
+#btn-settings {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 16px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#btn-settings:hover {
+    color: #fff;
+}
+
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 15px;
+    padding: 25px;
+    flex-grow: 1;
+}
+
+.sound-btn {
+    background-color: #2a2a2a;
+    border: 2px solid #444;
+    border-radius: 8px;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.05s, border-color 0.1s, box-shadow 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding: 10px;
+    /* Force GPU Hardware Acceleration for zero-latency UI rendering */
+    transform: translateZ(0); 
+}
+
+/* Visual feedback when pressed or triggered via MIDI */
+.sound-btn:active, .sound-btn.is-playing {
+    transform: scale(0.96);
+    border-color: #00ff88;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+    background-color: #333;
+}
