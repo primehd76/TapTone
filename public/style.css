@@ -235,3 +235,22 @@ hr { border: 0; border-top: 1px solid #2a2d3e; margin: 20px 0; }
     background: #3a3d52;
 }
 
+/* --- COLOR GROUP PICKER & HEX --- */
+.color-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.color-group input[type="color"] {
+    width: 40px;
+    height: 32px;
+    border: 1px solid #3a3d52;
+    background: #0f0f15;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+}
+.color-group input[type="text"] {
+    flex-grow: 1;
+}
+

@@ -28,7 +28,9 @@ function initButtonStates() {
                     file: "", 
                     midiNote: "", 
                     bgColor: "#2a2d3e",
-                    displayMode: "text"
+                    fontColor: "#ffffff",
+                    displayMode: "text",
+                    icon: "🔥"
                 };
             }
         }
@@ -57,11 +59,20 @@ function renderGrid() {
             button.className = 'sound-btn';
             button.id = `btn_${btnId}`;
             button.style.background = data.bgColor;
+            button.style.color = data.fontColor || "#ffffff";
             
             const span = document.createElement('span');
             span.className = 'btn-text';
             span.id = `text_${btnId}`;
-            span.innerText = data.name === "Empty" ? "Empty" : data.name; 
+            
+            // Render Text atau Stock Icon berdasarkan displayMode
+            if (data.displayMode === "icon") {
+                span.innerText = data.icon || "🔥";
+                span.style.fontSize = "28px"; // Ukuran icon lebih besar
+            } else {
+                span.innerText = data.name === "Empty" ? "Empty" : data.name;
+                span.style.fontSize = ""; 
+            }
             
             button.appendChild(span);
             gridContainer.appendChild(button);
@@ -74,10 +85,7 @@ function renderGrid() {
                 }
             });
 
-            button.addEventListener('dragover', (e) => {
-                if (isEditMode) e.preventDefault();
-            });
-
+            button.addEventListener('dragover', (e) => { if (isEditMode) e.preventDefault(); });
             button.addEventListener('drop', (e) => {
                 e.preventDefault();
                 if (isEditMode) {
@@ -89,11 +97,8 @@ function renderGrid() {
                         const cleanName = file.replace('.wav', '');
                         buttonState[pageOfThisButton][btnId].name = cleanName;
                     }
-                    
                     renderGrid();
-                    if (activeConfigId === btnId) {
-                        openConfigForButton(btnId, pageOfThisButton);
-                    }
+                    if (activeConfigId === btnId) openConfigForButton(btnId, pageOfThisButton);
                 }
             });
         }
@@ -137,12 +142,10 @@ async function fetchLibrary() {
         
         const btnRename = document.createElement('button');
         btnRename.innerText = '✏️';
-        btnRename.title = 'Rename File';
         btnRename.onclick = () => renameAudio(sound);
         
         const btnDel = document.createElement('button');
         btnDel.innerText = '❌';
-        btnDel.title = 'Delete File';
         btnDel.onclick = () => deleteAudio(sound);
         
         actions.appendChild(btnRename);
@@ -150,7 +153,6 @@ async function fetchLibrary() {
         wrap.appendChild(li);
         wrap.appendChild(actions);
         audioListUI.appendChild(wrap);
-        
         preloadAudio(sound);
     });
 
@@ -192,7 +194,9 @@ async function loadProfile(profileName) {
                         action: b.Action ? b.Action[0].$.type : "blank",
                         file: (b.Action && b.Action[0].SoundFile) ? b.Action[0].SoundFile[0] : "",
                         bgColor: (b.Appearance && b.Appearance[0].BgColor) ? b.Appearance[0].BgColor[0] : "#2a2d3e",
+                        fontColor: (b.Appearance && b.Appearance[0].FontColor) ? b.Appearance[0].FontColor[0] : "#ffffff",
                         displayMode: (b.Appearance && b.Appearance[0].DisplayMode) ? b.Appearance[0].DisplayMode[0] : "text",
+                        icon: (b.Appearance && b.Appearance[0].Icon) ? b.Appearance[0].Icon[0] : "🔥",
                         midiNote: (b.MidiMapping && b.MidiMapping[0].Note) ? b.MidiMapping[0].Note[0] : ""
                     };
                 }
@@ -208,7 +212,6 @@ document.getElementById('btn-new-profile').addEventListener('click', async () =>
     let name = prompt("Enter new profile name (without .xml):");
     if (!name) return;
     name = name.trim() + '.xml';
-    
     await saveProfileToAPI(name);
     await fetchLibrary();
     profileSelect.value = name;
@@ -239,7 +242,12 @@ async function saveProfileToAPI(profileName) {
                 $: { id: id },
                 Name: data.name,
                 Action: { $: { type: data.action }, SoundFile: data.file },
-                Appearance: { BgColor: data.bgColor, DisplayMode: data.displayMode },
+                Appearance: { 
+                    BgColor: data.bgColor, 
+                    FontColor: data.fontColor,
+                    DisplayMode: data.displayMode,
+                    Icon: data.icon
+                },
                 MidiMapping: { Note: data.midiNote }
             });
         });
@@ -260,73 +268,40 @@ async function saveProfileToAPI(profileName) {
     });
 }
 
-// --- 5. AUDIO FILES CRUD & UPLOAD PROGRESS ---
+// --- 5. AUDIO FILES CRUD ---
 document.getElementById('btn-upload-sound').addEventListener('click', () => document.getElementById('file-upload-input').click());
 document.getElementById('file-upload-input').addEventListener('change', (e) => {
     if (!e.target.files.length) return;
-    
-    const file = e.target.files[0];
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', e.target.files[0]);
     
     const progressContainer = document.getElementById('upload-progress-container');
     const progressBar = document.getElementById('upload-progress-bar');
-    
     progressContainer.style.display = 'block';
     progressBar.style.width = '0%';
-    btnSettings.innerText = "Uploading...";
-
+    
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/upload', true);
-
     xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
-            progressBar.style.width = percentComplete + '%';
-        }
+        if (event.lengthComputable) progressBar.style.width = ((event.loaded / event.total) * 100) + '%';
     };
-
     xhr.onload = () => {
-        if (xhr.status === 200) {
-            fetchLibrary();
-        } else {
-            alert("Upload failed! Status: " + xhr.status);
-        }
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-            e.target.value = '';
-            btnSettings.innerText = "💾 Save Profile & Exit";
-        }, 500);
+        if (xhr.status === 200) fetchLibrary();
+        setTimeout(() => { progressContainer.style.display = 'none'; e.target.value = ''; }, 500);
     };
-
-    xhr.onerror = () => {
-        alert("Upload error!");
-        progressContainer.style.display = 'none';
-        e.target.value = '';
-        btnSettings.innerText = "💾 Save Profile & Exit";
-    };
-
     xhr.send(formData);
 });
 
 async function deleteAudio(filename) {
     if (!confirm(`Delete sound ${filename}?`)) return;
-    await fetch('/api/delete-sound', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename })
-    });
+    await fetch('/api/delete-sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) });
     fetchLibrary();
 }
 
 async function renameAudio(oldName) {
     let newName = prompt("Enter new filename:", oldName);
     if (!newName || newName === oldName) return;
-    await fetch('/api/rename-sound', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldName, newName })
-    });
+    await fetch('/api/rename-sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldName, newName }) });
     fetchLibrary();
 }
 
@@ -335,18 +310,13 @@ async function preloadAudio(fileName) {
     if (audioBuffers[fileName]) return;
     try {
         const res = await fetch(`/assets/sounds/${fileName}`);
-        const arrayBuffer = await res.arrayBuffer();
-        audioBuffers[fileName] = await audioCtx.decodeAudioData(arrayBuffer);
-    } catch (e) { console.warn(`Skipping audio: ${fileName}`); }
+        audioBuffers[fileName] = await audioCtx.decodeAudioData(await res.arrayBuffer());
+    } catch (e) {}
 }
 
 function playAudio(fileName) {
-    if (!audioBuffers[fileName]) {
-        preloadAudio(fileName).then(() => playAudio(fileName));
-        return;
-    }
+    if (!audioBuffers[fileName]) { preloadAudio(fileName).then(() => playAudio(fileName)); return; }
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffers[fileName];
     source.connect(audioCtx.destination);
@@ -384,15 +354,28 @@ function openConfigForButton(id, page = activePage) {
     document.getElementById('select-action-type').value = data.action;
     document.getElementById('input-sound-file').value = data.file;
     document.getElementById('select-display-mode').value = data.displayMode || "text";
-    document.getElementById('input-bg-color').value = data.bgColor;
+    document.getElementById('select-stock-icon').value = data.icon || "🔥";
+    
+    // Tampilkan/Sembunyikan Picker Icon
+    const iconContainer = document.getElementById('icon-picker-container');
+    iconContainer.style.display = data.displayMode === "icon" ? "block" : "none";
+
+    // Set Colors
+    document.getElementById('input-bg-color').value = data.bgColor || "#2a2d3e";
+    document.getElementById('input-bg-hex').value = data.bgColor || "#2a2d3e";
+    document.getElementById('input-font-color').value = data.fontColor || "#ffffff";
+    document.getElementById('input-font-hex').value = data.fontColor || "#ffffff";
     document.getElementById('input-midi').value = data.midiNote || "";
 }
 
+// Real-time Inputs
 document.getElementById('input-btn-name').addEventListener('input', (e) => {
     if (!activeConfigId) return;
     const val = e.target.value || "Empty";
     buttonState[activePage][activeConfigId].name = val;
-    document.getElementById(`text_${activeConfigId}`).innerText = val;
+    if (buttonState[activePage][activeConfigId].displayMode === "text") {
+        document.getElementById(`text_${activeConfigId}`).innerText = val;
+    }
 });
 
 document.getElementById('select-action-type').addEventListener('change', (e) => {
@@ -400,16 +383,67 @@ document.getElementById('select-action-type').addEventListener('change', (e) => 
 });
 
 document.getElementById('select-display-mode').addEventListener('change', (e) => {
-    if (activeConfigId) buttonState[activePage][activeConfigId].displayMode = e.target.value;
+    if (!activeConfigId) return;
+    const mode = e.target.value;
+    buttonState[activePage][activeConfigId].displayMode = mode;
+    
+    const iconContainer = document.getElementById('icon-picker-container');
+    iconContainer.style.display = mode === "icon" ? "block" : "none";
+    
+    const span = document.getElementById(`text_${activeConfigId}`);
+    if (mode === "icon") {
+        const icon = buttonState[activePage][activeConfigId].icon || "🔥";
+        span.innerText = icon;
+        span.style.fontSize = "28px";
+    } else {
+        const name = buttonState[activePage][activeConfigId].name;
+        span.innerText = name === "Empty" ? "Empty" : name;
+        span.style.fontSize = "";
+    }
 });
 
+document.getElementById('select-stock-icon').addEventListener('change', (e) => {
+    if (!activeConfigId) return;
+    const icon = e.target.value;
+    buttonState[activePage][activeConfigId].icon = icon;
+    if (buttonState[activePage][activeConfigId].displayMode === "icon") {
+        document.getElementById(`text_${activeConfigId}`).innerText = icon;
+    }
+});
+
+// Background Color Synchronizer (Picker <-> Hex Input)
 document.getElementById('input-bg-color').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    buttonState[activePage][activeConfigId].bgColor = e.target.value;
-    document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
+    const val = e.target.value;
+    document.getElementById('input-bg-hex').value = val;
+    buttonState[activePage][activeConfigId].bgColor = val;
+    document.getElementById(`btn_${activeConfigId}`).style.background = val;
+});
+document.getElementById('input-bg-hex').addEventListener('input', (e) => {
+    if (!activeConfigId) return;
+    const val = e.target.value;
+    document.getElementById('input-bg-color').value = val;
+    buttonState[activePage][activeConfigId].bgColor = val;
+    document.getElementById(`btn_${activeConfigId}`).style.background = val;
 });
 
-// Clear Sound File Button
+// Font Color Synchronizer (Picker <-> Hex Input)
+document.getElementById('input-font-color').addEventListener('input', (e) => {
+    if (!activeConfigId) return;
+    const val = e.target.value;
+    document.getElementById('input-font-hex').value = val;
+    buttonState[activePage][activeConfigId].fontColor = val;
+    document.getElementById(`btn_${activeConfigId}`).style.color = val;
+});
+document.getElementById('input-font-hex').addEventListener('input', (e) => {
+    if (!activeConfigId) return;
+    const val = e.target.value;
+    document.getElementById('input-font-color').value = val;
+    buttonState[activePage][activeConfigId].fontColor = val;
+    document.getElementById(`btn_${activeConfigId}`).style.color = val;
+});
+
+// Clear Buttons
 document.getElementById('btn-clear-sound').addEventListener('click', () => {
     if (!activeConfigId) return;
     buttonState[activePage][activeConfigId].file = "";
@@ -418,7 +452,6 @@ document.getElementById('btn-clear-sound').addEventListener('click', () => {
     document.getElementById('select-action-type').value = "blank";
 });
 
-// Clear MIDI Button
 document.getElementById('btn-clear-midi').addEventListener('click', () => {
     if (!activeConfigId) return;
     buttonState[activePage][activeConfigId].midiNote = "";
@@ -441,7 +474,9 @@ dropZone.addEventListener('drop', e => {
             const cleanName = file.replace('.wav', '');
             buttonState[activePage][activeConfigId].name = cleanName;
             document.getElementById('input-btn-name').value = cleanName;
-            document.getElementById(`text_${activeConfigId}`).innerText = cleanName;
+            if (buttonState[activePage][activeConfigId].displayMode === "text") {
+                document.getElementById(`text_${activeConfigId}`).innerText = cleanName;
+            }
         }
     }
 });

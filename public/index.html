@@ -73,10 +73,35 @@
                         <label>Display Mode:</label>
                         <select id="select-display-mode">
                             <option value="text">Text Only</option>
-                            <option value="image">Image Background</option>
+                            <option value="icon">Stock Icon</option>
                         </select>
-                        <label>Background Color:</label>
-                        <input type="color" id="input-bg-color" value="#2a2d3e">
+
+                        <!-- Kontainer khusus untuk pilihan Icon jika Display Mode = Icon -->
+                        <div id="icon-picker-container" style="display: none; margin-top: 8px;">
+                            <label>Select Icon:</label>
+                            <select id="select-stock-icon">
+                                <option value="🔥">🔥 Fire</option>
+                                <option value="👏">👏 Clap</option>
+                                <option value="🎉">🎉 Party</option>
+                                <option value="🚨">🚨 Alert</option>
+                                <option value="😂">😂 Laugh</option>
+                                <option value="⏰">⏰ Timer</option>
+                                <option value="🎵">🎵 Music</option>
+                                <option value="💥">💥 Boom</option>
+                            </select>
+                        </div>
+
+                        <label>Background Color (Hex/RGB):</label>
+                        <div class="color-group">
+                            <input type="color" id="input-bg-color" value="#2a2d3e">
+                            <input type="text" id="input-bg-hex" placeholder="#2a2d3e">
+                        </div>
+
+                        <label>Font Color (Hex/RGB):</label>
+                        <div class="color-group">
+                            <input type="color" id="input-font-color" value="#ffffff">
+                            <input type="text" id="input-font-hex" placeholder="#ffffff">
+                        </div>
                     </div>
 
                     <div class="config-col">
