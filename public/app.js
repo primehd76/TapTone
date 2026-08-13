@@ -77,13 +77,21 @@ function handleMIDIMessage(message) {
     const note = message.data[1];
     const velocity = (message.data.length > 2) ? message.data[2] : 0;
 
-    if (command === 144 && velocity > 0) { // 144 = Note On
+    // Menampilkan log di Inspect Element (F12) biar gampang ngecek data yang masuk
+    console.log(`[MIDI IN] Command: ${command}, Note: ${note}, Velocity: ${velocity}`);
+
+    // Mendeteksi Note On di SEMUA Channel (144 = Ch 1, 159 = Ch 16)
+    const isNoteOn = (command >= 144 && command <= 159);
+
+    // Mengeksekusi hanya jika tombol dipencet (velocity > 0), bukan saat dilepas
+    if (isNoteOn && velocity > 0) { 
         if (isEditMode && activeConfigId) {
+            // MODE ASSIGN
             document.getElementById('input-midi').value = note;
             buttonState[activePage][activeConfigId].midiNote = note;
             showToast(`MIDI Assigned: Note ${note}`);
         } else {
-            // Loop untuk mencari tombol mana yang punya Note ini di Active Page
+            // MODE PLAY
             Object.keys(buttonState[activePage]).forEach(id => {
                 if (buttonState[activePage][id].midiNote == note) {
                     triggerButtonAction(id, activePage);
