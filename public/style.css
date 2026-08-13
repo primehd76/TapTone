@@ -209,3 +209,29 @@ hr { border: 0; border-top: 1px solid #2a2d3e; margin: 20px 0; }
     transition: width 0.1s linear;
 }
 
+/* --- MULTILINE & PAGE NAV --- */
+.sound-btn {
+    white-space: pre-line !important; /* Agar fungsi \n (enter) di teks tombol berfungsi */
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.page-nav-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-nav-group button {
+    background: #2a2d3e;
+    border: 1px solid #3a3d52;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.page-nav-group button:hover {
+    background: #3a3d52;
+}
+

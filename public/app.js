@@ -2,6 +2,7 @@ console.log("[TapTone] Core Engine Initialized.");
 
 let isEditMode = false;
 let currentProfile = "default.xml";
+let activePage = 1;
 let buttonState = {}; 
 let activeConfigId = null; 
 let audioBuffers = {}; 
@@ -13,39 +14,88 @@ const btnSettings = document.getElementById('btn-settings');
 const audioListUI = document.getElementById('audio-list');
 const profileSelect = document.getElementById('profile-select');
 
-// --- 1. INITIALIZATION & DATA FETCHING ---
+// --- 1. INITIALIZATION & 5-PAGE STATES ---
+function initButtonStates() {
+    buttonState = {};
+    for (let p = 1; p <= 5; p++) {
+        buttonState[p] = {};
+        for (let row = 1; row <= 3; row++) {
+            for (let col = 1; col <= 5; col++) {
+                const btnId = `${row}_${col}`;
+                buttonState[p][btnId] = { 
+                    name: "Empty", 
+                    action: "blank", 
+                    file: "", 
+                    midiNote: "", 
+                    bgColor: "#2a2d3e" 
+                };
+            }
+        }
+    }
+}
+
 async function initApp() {
-    generateEmptyGrid();
+    initButtonStates();
+    renderGrid();
     await fetchLibrary();
     await loadProfile(currentProfile);
 }
 
-function generateEmptyGrid() {
+// --- 2. GRID RENDERING & PAGE NAVIGATION ---
+function renderGrid() {
     gridContainer.innerHTML = ''; 
+    document.getElementById('page-indicator').innerText = `Page ${activePage} / 5`;
+
     for (let row = 1; row <= 3; row++) {
         for (let col = 1; col <= 5; col++) {
             const btnId = `${row}_${col}`;
-            buttonState[btnId] = { name: "Empty", action: "blank", file: "", midiNote: "", bgColor: "#2a2d3e" }; 
+            const data = buttonState[activePage][btnId];
             
             const button = document.createElement('button');
             button.className = 'sound-btn';
             button.id = `btn_${btnId}`;
-            button.innerHTML = `<span class="btn-text" id="text_${btnId}">Empty</span>`; 
+            button.style.background = data.bgColor;
+            
+            const span = document.createElement('span');
+            span.className = 'btn-text';
+            span.id = `text_${btnId}`;
+            span.innerText = data.name === "Empty" ? "Empty" : data.name; 
+            
+            button.appendChild(span);
             gridContainer.appendChild(button);
             
             button.addEventListener('mousedown', () => {
-                if (isEditMode) openConfigForButton(btnId);
-                else triggerButtonAction(btnId);
+                if (isEditMode) {
+                    openConfigForButton(btnId);
+                } else {
+                    triggerButtonAction(btnId);
+                }
             });
         }
     }
 }
 
+document.getElementById('btn-next-page').addEventListener('click', () => {
+    if (activePage < 5) {
+        activePage++;
+        renderGrid();
+        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId);
+    }
+});
+
+document.getElementById('btn-prev-page').addEventListener('click', () => {
+    if (activePage > 1) {
+        activePage--;
+        renderGrid();
+        if (activeConfigId && isEditMode) openConfigForButton(activeConfigId);
+    }
+});
+
+// --- 3. FETCH LIBRARY & PROFILES ---
 async function fetchLibrary() {
     const res = await fetch('/api/library');
     const data = await res.json();
     
-    // Render Audio List
     audioListUI.innerHTML = '';
     data.sounds.forEach(sound => {
         const wrap = document.createElement('div');
@@ -77,7 +127,6 @@ async function fetchLibrary() {
         preloadAudio(sound);
     });
 
-    // Render Profiles Dropdown
     profileSelect.innerHTML = '';
     data.profiles.forEach(prof => {
         const opt = document.createElement('option');
@@ -88,7 +137,7 @@ async function fetchLibrary() {
     });
 }
 
-// --- 2. PROFILE CRUD LOGIC ---
+// --- 4. PROFILE CRUD & 5-PAGE XML PARSING ---
 async function loadProfile(profileName) {
     document.getElementById('current-profile-name').innerText = profileName.replace('.xml', '');
     currentProfile = profileName;
@@ -100,24 +149,29 @@ async function loadProfile(profileName) {
     });
     const { status, data } = await res.json();
     
-    generateEmptyGrid(); // Reset grid before populating
+    initButtonStates(); // Reset states
     
-    if (status === 'success' && data.SoundboardProfile.Pages) {
-        const buttons = data.SoundboardProfile.Pages[0].Page[0].Button || [];
-        buttons.forEach(b => {
-            const id = b.$.id;
-            buttonState[id] = {
-                name: b.Name ? b.Name[0] : "Empty",
-                action: b.Action ? b.Action[0].$.type : "blank",
-                file: (b.Action && b.Action[0].SoundFile) ? b.Action[0].SoundFile[0] : "",
-                bgColor: (b.Appearance && b.Appearance[0].BgColor) ? b.Appearance[0].BgColor[0] : "#2a2d3e",
-                midiNote: (b.MidiMapping && b.MidiMapping[0].Note) ? b.MidiMapping[0].Note[0] : ""
-            };
-            // Apply visual state
-            document.getElementById(`text_${id}`).innerText = buttonState[id].name;
-            document.getElementById(`btn_${id}`).style.background = buttonState[id].bgColor;
+    if (status === 'success' && data.SoundboardProfile.Pages && data.SoundboardProfile.Pages[0].Page) {
+        const pages = data.SoundboardProfile.Pages[0].Page;
+        pages.forEach(page => {
+            const pageIndex = parseInt(page.$.index);
+            const buttons = page.Button || [];
+            
+            buttons.forEach(b => {
+                const id = b.$.id;
+                if (buttonState[pageIndex] && buttonState[pageIndex][id]) {
+                    buttonState[pageIndex][id] = {
+                        name: b.Name ? b.Name[0] : "Empty",
+                        action: b.Action ? b.Action[0].$.type : "blank",
+                        file: (b.Action && b.Action[0].SoundFile) ? b.Action[0].SoundFile[0] : "",
+                        bgColor: (b.Appearance && b.Appearance[0].BgColor) ? b.Appearance[0].BgColor[0] : "#2a2d3e",
+                        midiNote: (b.MidiMapping && b.MidiMapping[0].Note) ? b.MidiMapping[0].Note[0] : ""
+                    };
+                }
+            });
         });
     }
+    renderGrid();
 }
 
 profileSelect.addEventListener('change', (e) => loadProfile(e.target.value));
@@ -127,7 +181,6 @@ document.getElementById('btn-new-profile').addEventListener('click', async () =>
     if (!name) return;
     name = name.trim() + '.xml';
     
-    // Save an empty profile to trigger creation
     await saveProfileToAPI(name);
     await fetchLibrary();
     profileSelect.value = name;
@@ -149,21 +202,29 @@ document.getElementById('btn-del-profile').addEventListener('click', async () =>
 });
 
 async function saveProfileToAPI(profileName) {
+    const pagesArray = [];
+    for (let p = 1; p <= 5; p++) {
+        const pageButtons = [];
+        Object.keys(buttonState[p]).forEach(id => {
+            const data = buttonState[p][id];
+            pageButtons.push({
+                $: { id: id },
+                Name: data.name,
+                Action: { $: { type: data.action }, SoundFile: data.file },
+                Appearance: { BgColor: data.bgColor },
+                MidiMapping: { Note: data.midiNote }
+            });
+        });
+        pagesArray.push({ $: { index: p.toString() }, Button: pageButtons });
+    }
+
     const profileData = {
         SoundboardProfile: {
             $: { name: profileName.replace('.xml', ''), is_readonly: profileName === 'default.xml' ? "true" : "false" },
-            Pages: { Page: [{ $: { index: "1" }, Button: [] }] }
+            Pages: { Page: pagesArray }
         }
     };
-    Object.keys(buttonState).forEach(id => {
-        profileData.SoundboardProfile.Pages.Page[0].Button.push({
-            $: { id: id },
-            Name: buttonState[id].name,
-            Action: { $: { type: buttonState[id].action }, SoundFile: buttonState[id].file },
-            Appearance: { BgColor: buttonState[id].bgColor },
-            MidiMapping: { Note: buttonState[id].midiNote }
-        });
-    });
+    
     await fetch('/api/save-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -171,59 +232,8 @@ async function saveProfileToAPI(profileName) {
     });
 }
 
-// --- 3. AUDIO FILES CRUD ---
+// --- 5. AUDIO FILES CRUD ---
 document.getElementById('btn-upload-sound').addEventListener('click', () => document.getElementById('file-upload-input').click());
-document.getElementById('file-upload-input').addEventListener('change', (e) => {
-    if (!e.target.files.length) return;
-    
-    const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const progressContainer = document.getElementById('upload-progress-container');
-    const progressBar = document.getElementById('upload-progress-bar');
-    
-    // Tampilkan progress bar
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
-    btnSettings.innerText = "Uploading...";
-
-    // Pakai XMLHttpRequest agar bisa melacak progress (Fetch API tidak bisa)
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload', true);
-
-    xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
-            progressBar.style.width = percentComplete + '%';
-        }
-    };
-
-    xhr.onload = () => {
-        if (xhr.status === 200) {
-            console.log("[TapTone] Upload success.");
-            fetchLibrary(); // Refresh list audio
-        } else {
-            alert("Upload failed! Server responded with status: " + xhr.status);
-        }
-        
-        // Sembunyikan progress bar setelah selesai (dengan sedikit jeda)
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-            e.target.value = ''; // Reset input agar bisa upload file yang sama lagi
-            btnSettings.innerText = "💾 Save Profile & Exit";
-        }, 500);
-    };
-
-    xhr.onerror = () => {
-        alert("Upload error! Please check your network or Docker connection.");
-        progressContainer.style.display = 'none';
-        e.target.value = '';
-        btnSettings.innerText = "💾 Save Profile & Exit";
-    };
-
-    xhr.send(formData);
-});
 
 async function deleteAudio(filename) {
     if (!confirm(`Delete sound ${filename}?`)) return;
@@ -246,7 +256,7 @@ async function renameAudio(oldName) {
     fetchLibrary();
 }
 
-// --- 4. PLAYBACK ENGINE ---
+// --- 6. PLAYBACK ENGINE ---
 async function preloadAudio(fileName) {
     if (audioBuffers[fileName]) return;
     try {
@@ -273,41 +283,47 @@ function stopAllAudio() {
 
 function triggerButtonAction(id) {
     const btn = document.getElementById(`btn_${id}`);
-    const data = buttonState[id];
+    const data = buttonState[activePage][id];
     btn.classList.add('is-playing');
     setTimeout(() => btn.classList.remove('is-playing'), 250);
 
     if (data.action === "play_sound" && data.file) playAudio(data.file);
     else if (data.action === "stop_all") stopAllAudio();
+    else if (data.action === "next_page" && activePage < 5) { activePage++; renderGrid(); }
+    else if (data.action === "prev_page" && activePage > 1) { activePage--; renderGrid(); }
 }
 
-// --- 5. EDIT MODE & BINDINGS ---
+// --- 7. EDIT MODE & BINDINGS ---
 function openConfigForButton(id) {
     activeConfigId = id;
     document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
     document.getElementById(`btn_${id}`).style.borderColor = '#00ff88';
     
-    document.getElementById('selected-btn-id').innerText = `(${id})`;
-    document.getElementById('input-btn-name').value = buttonState[id].name === "Empty" ? "" : buttonState[id].name;
-    document.getElementById('select-action-type').value = buttonState[id].action;
-    document.getElementById('input-sound-file').value = buttonState[id].file;
-    document.getElementById('input-bg-color').value = buttonState[id].bgColor;
+    const data = buttonState[activePage][id];
+    document.getElementById('selected-btn-id').innerText = `(P${activePage} - ${id})`;
+    document.getElementById('input-btn-name').value = data.name === "Empty" ? "" : data.name;
+    document.getElementById('select-action-type').value = data.action;
+    document.getElementById('input-sound-file').value = data.file;
+    document.getElementById('input-bg-color').value = data.bgColor;
 }
 
-// Bind Config Panel Inputs
 document.getElementById('input-btn-name').addEventListener('input', (e) => {
     if (!activeConfigId) return;
-    buttonState[activeConfigId].name = e.target.value || "Empty";
-    document.getElementById(`text_${activeConfigId}`).innerText = buttonState[activeConfigId].name;
+    const val = e.target.value || "Empty";
+    buttonState[activePage][activeConfigId].name = val;
+    document.getElementById(`text_${activeConfigId}`).innerText = val;
 });
-document.getElementById('select-action-type').addEventListener('change', (e) => activeConfigId && (buttonState[activeConfigId].action = e.target.value));
+
+document.getElementById('select-action-type').addEventListener('change', (e) => {
+    if (activeConfigId) buttonState[activePage][activeConfigId].action = e.target.value;
+});
+
 document.getElementById('input-bg-color').addEventListener('input', (e) => {
     if (!activeConfigId) return;
     buttonState[activeConfigId].bgColor = e.target.value;
     document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
 });
 
-// Drag & Drop
 const dropZone = document.getElementById('input-sound-file');
 dropZone.addEventListener('dragover', e => e.preventDefault());
 dropZone.addEventListener('drop', e => {
@@ -315,8 +331,8 @@ dropZone.addEventListener('drop', e => {
     if (activeConfigId) {
         const file = e.dataTransfer.getData('text/plain');
         dropZone.value = file;
-        buttonState[activeConfigId].file = file;
-        buttonState[activeConfigId].action = "play_sound";
+        buttonState[activePage][activeConfigId].file = file;
+        buttonState[activePage][activeConfigId].action = "play_sound";
         document.getElementById('select-action-type').value = "play_sound";
     }
 });
@@ -335,6 +351,7 @@ btnSettings.addEventListener('click', async () => {
         btnSettings.classList.remove('save-mode');
         document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
         activeConfigId = null;
+        renderGrid();
     }
 });
 
