@@ -22,7 +22,7 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`[TapTone] Server is running on http://localhost:${PORT}`);
+// Start the server on all network interfaces to allow external access
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[TapTone] Server is running on http://0.0.0.0:${PORT}`);
 });
