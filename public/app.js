@@ -173,16 +173,56 @@ async function saveProfileToAPI(profileName) {
 
 // --- 3. AUDIO FILES CRUD ---
 document.getElementById('btn-upload-sound').addEventListener('click', () => document.getElementById('file-upload-input').click());
-document.getElementById('file-upload-input').addEventListener('change', async (e) => {
+document.getElementById('file-upload-input').addEventListener('change', (e) => {
     if (!e.target.files.length) return;
-    const formData = new FormData();
-    formData.append('file', e.target.files[0]);
     
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressBar = document.getElementById('upload-progress-bar');
+    
+    // Tampilkan progress bar
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
     btnSettings.innerText = "Uploading...";
-    await fetch('/api/upload', { method: 'POST', body: formData });
-    e.target.value = ''; // Reset input
-    fetchLibrary();
-    btnSettings.innerText = "💾 Save Profile & Exit";
+
+    // Pakai XMLHttpRequest agar bisa melacak progress (Fetch API tidak bisa)
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload', true);
+
+    xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            progressBar.style.width = percentComplete + '%';
+        }
+    };
+
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            console.log("[TapTone] Upload success.");
+            fetchLibrary(); // Refresh list audio
+        } else {
+            alert("Upload failed! Server responded with status: " + xhr.status);
+        }
+        
+        // Sembunyikan progress bar setelah selesai (dengan sedikit jeda)
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            e.target.value = ''; // Reset input agar bisa upload file yang sama lagi
+            btnSettings.innerText = "💾 Save Profile & Exit";
+        }, 500);
+    };
+
+    xhr.onerror = () => {
+        alert("Upload error! Please check your network or Docker connection.");
+        progressContainer.style.display = 'none';
+        e.target.value = '';
+        btnSettings.innerText = "💾 Save Profile & Exit";
+    };
+
+    xhr.send(formData);
 });
 
 async function deleteAudio(filename) {

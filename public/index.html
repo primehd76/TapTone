@@ -26,13 +26,16 @@
                 <div class="library-header">
                     <h4>Sound Files (.wav)</h4>
                     <button id="btn-upload-sound" class="action-btn">+ Upload</button>
-                    <!-- Input file disembunyikan, di-trigger via tombol di atas -->
                     <input type="file" id="file-upload-input" accept=".wav" style="display: none;">
                 </div>
-                
+
+                <!-- TAMBAHKAN KODE INI TEPAT DI BAWAH LIBRARY HEADER -->
+                <div id="upload-progress-container" style="display: none;">
+                    <div id="upload-progress-bar"></div>
+                </div>
+                <!-- ------------------------------------------------ -->
+
                 <ul id="audio-list" class="file-list">
-                    <!-- Data dummy dihapus, murni dari fetch API -->
-                </ul>
             </div>
         </aside>
 

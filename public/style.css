@@ -190,3 +190,22 @@ hr { border: 0; border-top: 1px solid #2a2d3e; margin: 20px 0; }
 .file-actions button { background: none; border: none; cursor: pointer; opacity: 0.6; transition: 0.2s; font-size: 14px; }
 .file-actions button:hover { opacity: 1; transform: scale(1.1); }
 
+/* --- UPLOAD PROGRESS BAR --- */
+#upload-progress-container {
+    width: 100%;
+    background-color: #1e1e2e;
+    border: 1px solid #2a2d3e;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    height: 12px;
+    overflow: hidden;
+}
+
+#upload-progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: #00ff88;
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    transition: width 0.1s linear;
+}
+
