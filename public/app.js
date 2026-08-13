@@ -49,7 +49,9 @@ function renderGrid() {
     for (let row = 1; row <= 3; row++) {
         for (let col = 1; col <= 5; col++) {
             const btnId = `${row}_${col}`;
-            const data = buttonState[activePage][btnId];
+            // KUNCI PERBAIKAN: Tangkap nilai activePage saat ini ke dalam variabel konstan (closure)
+            const pageOfThisButton = activePage; 
+            const data = buttonState[pageOfThisButton][btnId];
             
             const button = document.createElement('button');
             button.className = 'sound-btn';
@@ -64,11 +66,12 @@ function renderGrid() {
             button.appendChild(span);
             gridContainer.appendChild(button);
             
+            // Gunakan pageOfThisButton agar ID dan halamannya tidak tertukar saat dipencet
             button.addEventListener('mousedown', () => {
                 if (isEditMode) {
-                    openConfigForButton(btnId);
+                    openConfigForButton(btnId, pageOfThisButton);
                 } else {
-                    triggerButtonAction(btnId);
+                    triggerButtonAction(btnId, pageOfThisButton);
                 }
             });
         }
@@ -281,9 +284,9 @@ function stopAllAudio() {
     playingSources = [];
 }
 
-function triggerButtonAction(id) {
+function triggerButtonAction(id, page = activePage) {
     const btn = document.getElementById(`btn_${id}`);
-    const data = buttonState[activePage][id];
+    const data = buttonState[page][id]; // Mengambil data sesuai halaman tombol tersebut
     btn.classList.add('is-playing');
     setTimeout(() => btn.classList.remove('is-playing'), 250);
 
@@ -294,13 +297,13 @@ function triggerButtonAction(id) {
 }
 
 // --- 7. EDIT MODE & BINDINGS ---
-function openConfigForButton(id) {
+function openConfigForButton(id, page = activePage) {
     activeConfigId = id;
     document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
     document.getElementById(`btn_${id}`).style.borderColor = '#00ff88';
     
-    const data = buttonState[activePage][id];
-    document.getElementById('selected-btn-id').innerText = `(P${activePage} - ${id})`;
+    const data = buttonState[page][id]; // Mengambil data config sesuai halaman
+    document.getElementById('selected-btn-id').innerText = `(P${page} - ${id})`;
     document.getElementById('input-btn-name').value = data.name === "Empty" ? "" : data.name;
     document.getElementById('select-action-type').value = data.action;
     document.getElementById('input-sound-file').value = data.file;
