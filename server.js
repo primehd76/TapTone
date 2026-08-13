@@ -11,15 +11,26 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
+// --- ENSURE DIRS EXIST ---
+const soundDir = path.join(__dirname, 'assets/sounds');
+const profileDir = path.join(__dirname, 'data/profiles');
+
+if (!fs.existsSync(soundDir)) {
+    fs.mkdirSync(soundDir, { recursive: true });
+}
+if (!fs.existsSync(profileDir)) {
+    fs.mkdirSync(profileDir, { recursive: true });
+}
+
 // --- MULTER SETUP (UPLOAD) ---
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'assets/sounds/'),
+    destination: (req, file, cb) => cb(null, soundDir),
     filename: (req, file, cb) => {
         let fileName = file.originalname;
         let ext = path.extname(fileName);
         let baseName = path.basename(fileName, ext);
         let counter = 1;
-        while (fs.existsSync(path.join(__dirname, 'assets/sounds/', fileName))) {
+        while (fs.existsSync(path.join(soundDir, fileName))) {
             fileName = `${baseName} (${counter})${ext}`;
             counter++;
         }
