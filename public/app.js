@@ -3,69 +3,134 @@ console.log("[TapTone] Core Engine Initialized.");
 // --- GLOBAL STATE ---
 let isEditMode = false;
 let currentProfile = "event_podcast.xml";
-let buttonState = {}; // Stores config for each button (1_1 to 3_5)
+let buttonState = {}; 
 let activeConfigId = null; 
 
 // --- AUDIO & MIDI ENGINE ---
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioContext();
-let audioBuffers = {}; // Preloaded sounds
-let playingSources = []; // Tracks currently playing audio
+let audioBuffers = {}; 
+let playingSources = []; 
 
-// Init MIDI
-if (navigator.requestMIDIAccess) {
-    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
-} else {
-    console.warn("Web MIDI API not supported in this browser.");
-}
-
-function onMIDISuccess(midiAccess) {
-    console.log("[TapTone] MIDI Ready.");
-    for (var input of midiAccess.inputs.values()) {
-        input.onmidimessage = handleMIDIMessage;
+// 1. Preload Audio to RAM for Zero Latency
+async function preloadAudio(fileName) {
+    if (audioBuffers[fileName]) return; // Skip if already loaded
+    try {
+        const response = await fetch(`/assets/sounds/${fileName}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        audioBuffers[fileName] = audioBuffer;
+        console.log(`[Audio Engine] Preloaded: ${fileName}`);
+    } catch (err) {
+        console.error(`Failed to load audio: ${fileName}`, err);
     }
 }
-function onMIDIFailure() { console.error("Could not access your MIDI devices."); }
+
+// 2. Play Audio Node
+function playAudio(fileName) {
+    if (!audioBuffers[fileName]) {
+        console.warn(`[Audio Engine] Buffer not found for ${fileName}. Attempting to load...`);
+        preloadAudio(fileName).then(() => playAudio(fileName));
+        return;
+    }
+    
+    // Resume context if browser suspends it
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffers[fileName];
+    source.connect(audioCtx.destination);
+    source.start(0);
+    playingSources.push(source);
+
+    source.onended = () => {
+        // Cleanup memory when playback finishes
+        playingSources = playingSources.filter(s => s !== source);
+    };
+}
+
+// 3. Stop All Audio
+function stopAllAudio() {
+    playingSources.forEach(source => {
+        try { source.stop(); } catch (e) {}
+    });
+    playingSources = [];
+    console.log("[Audio Engine] All sounds stopped.");
+}
+
+// --- MIDI INIT ---
+if (navigator.requestMIDIAccess) {
+    navigator.requestMIDIAccess().then(
+        (midiAccess) => {
+            console.log("[TapTone] MIDI Ready.");
+            for (var input of midiAccess.inputs.values()) {
+                input.onmidimessage = handleMIDIMessage;
+            }
+        }, 
+        () => console.error("Could not access your MIDI devices.")
+    );
+}
 
 function handleMIDIMessage(message) {
     const command = message.data[0];
     const note = message.data[1];
-    const velocity = (message.data.length > 2) ? message.data[2] : 0; // a velocity value might not be included with a noteOff command
+    const velocity = (message.data.length > 2) ? message.data[2] : 0;
 
     if (command === 144 && velocity > 0) { // 144 = Note On
         if (isEditMode && activeConfigId) {
-            // Assign MIDI
             document.getElementById('input-midi').value = note;
             buttonState[activeConfigId].midiNote = note;
-            console.log(`Assigned MIDI Note ${note} to ${activeConfigId}`);
         } else {
-            // Play mapped button
             Object.keys(buttonState).forEach(id => {
-                if (buttonState[id].midiNote == note) {
-                    triggerButtonAction(id);
-                }
+                if (buttonState[id].midiNote == note) triggerButtonAction(id);
             });
         }
     }
 }
 
-// --- UI LOGIC ---
+// --- UI & DATA FETCHING ---
 const gridContainer = document.getElementById('sound-grid');
 const btnSettings = document.getElementById('btn-settings');
 const selectedBtnLabel = document.getElementById('selected-btn-id');
+const audioListUI = document.getElementById('audio-list');
+
+// Fetch Library from Backend
+async function fetchLibrary() {
+    try {
+        const res = await fetch('/api/library');
+        const data = await res.json();
+        
+        audioListUI.innerHTML = '';
+        data.sounds.forEach(sound => {
+            const li = document.createElement('li');
+            li.className = 'file-item';
+            li.draggable = true;
+            li.innerText = sound;
+            
+            // Drag Start Logic
+            li.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', sound);
+            });
+            
+            audioListUI.appendChild(li);
+            preloadAudio(sound); // Preload all fetched sounds
+        });
+    } catch (err) {
+        console.error("Failed to fetch library", err);
+    }
+}
 
 function generateGrid() {
     gridContainer.innerHTML = ''; 
     for (let row = 1; row <= 3; row++) {
         for (let col = 1; col <= 5; col++) {
             const btnId = `${row}_${col}`;
-            buttonState[btnId] = { name: "Empty", action: "blank", file: "", midiNote: "" }; // Default State
+            buttonState[btnId] = { name: "Empty", action: "blank", file: "", midiNote: "", bgColor: "#2a2d3e" }; 
             
             const button = document.createElement('button');
             button.className = 'sound-btn';
             button.id = `btn_${btnId}`;
-            button.dataset.id = btnId;
-            button.innerHTML = `<span class="btn-text">Empty</span>`; 
+            button.innerHTML = `<span class="btn-text" id="text_${btnId}">Empty</span>`; 
             gridContainer.appendChild(button);
             
             button.addEventListener('mousedown', () => {
@@ -80,77 +145,105 @@ function triggerButtonAction(id) {
     const btn = document.getElementById(`btn_${id}`);
     const data = buttonState[id];
 
-    // Visual Feedback
     btn.classList.add('is-playing');
-    setTimeout(() => btn.classList.remove('is-playing'), 300);
+    setTimeout(() => btn.classList.remove('is-playing'), 250);
 
-    // Logic
     if (data.action === "play_sound" && data.file) {
-        // Example: To implement Zero-Latency Web Audio API buffer playback later
-        console.log(`[Audio Engine] Playing: ${data.file}`);
+        playAudio(data.file);
     } else if (data.action === "stop_all") {
-        console.log(`[Audio Engine] Stopping all sounds.`);
+        stopAllAudio();
     }
 }
 
-// --- EDIT MODE & CONFIG LOGIC ---
+// --- EDIT MODE CONFIG ---
 function openConfigForButton(id) {
     activeConfigId = id;
     document.querySelectorAll('.sound-btn').forEach(b => b.style.borderColor = '');
     document.getElementById(`btn_${id}`).style.borderColor = '#00ff88';
     
     selectedBtnLabel.innerText = `(${id})`;
-    document.getElementById('input-btn-name').value = buttonState[id].name;
+    document.getElementById('input-btn-name').value = buttonState[id].name === "Empty" ? "" : buttonState[id].name;
     document.getElementById('select-action-type').value = buttonState[id].action;
     document.getElementById('input-sound-file').value = buttonState[id].file;
     document.getElementById('input-midi').value = buttonState[id].midiNote;
+    document.getElementById('input-bg-color').value = buttonState[id].bgColor || "#2a2d3e";
 }
 
+// REAL-TIME UI UPDATES (Typing in inputs updates the Grid immediately)
+document.getElementById('input-btn-name').addEventListener('input', (e) => {
+    if (!activeConfigId) return;
+    const val = e.target.value || "Empty";
+    buttonState[activeConfigId].name = val;
+    document.getElementById(`text_${activeConfigId}`).innerText = val;
+});
+
+document.getElementById('select-action-type').addEventListener('change', (e) => {
+    if (activeConfigId) buttonState[activeConfigId].action = e.target.value;
+});
+
+document.getElementById('input-bg-color').addEventListener('input', (e) => {
+    if (!activeConfigId) return;
+    buttonState[activeConfigId].bgColor = e.target.value;
+    document.getElementById(`btn_${activeConfigId}`).style.background = e.target.value;
+});
+
+// DRAG AND DROP TARGET LOGIC
+const dropZone = document.getElementById('input-sound-file');
+dropZone.addEventListener('dragover', (e) => e.preventDefault());
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const fileName = e.dataTransfer.getData('text/plain');
+    if (activeConfigId && fileName) {
+        dropZone.value = fileName;
+        buttonState[activeConfigId].file = fileName;
+        buttonState[activeConfigId].action = "play_sound";
+        document.getElementById('select-action-type').value = "play_sound";
+    }
+});
+dropZone.addEventListener('input', (e) => {
+    if (activeConfigId) buttonState[activeConfigId].file = e.target.value;
+});
+
+// --- TOGGLE EDIT MODE ---
 btnSettings.addEventListener('click', async () => {
     isEditMode = !isEditMode;
     
     if (isEditMode) {
-        // ENTER EDIT MODE
         document.body.classList.add('edit-mode');
         btnSettings.innerText = "💾 Save Profile & Exit";
         btnSettings.classList.add('save-mode');
+        fetchLibrary(); // Load files when opening edit mode
     } else {
-        // SAVE AND EXIT
         btnSettings.innerText = "Saving...";
         
-        // Prepare Data for XML Conversion
         const profileData = {
             SoundboardProfile: {
                 $: { name: "Event Podcast", is_readonly: "false" },
-                Pages: {
-                    Page: [{ $: { index: "1" }, Button: [] }]
-                }
+                Pages: { Page: [{ $: { index: "1" }, Button: [] }] }
             }
         };
 
-        // Populate JSON with button states
         Object.keys(buttonState).forEach(id => {
             profileData.SoundboardProfile.Pages.Page[0].Button.push({
                 $: { id: id },
                 Name: buttonState[id].name,
                 Action: { $: { type: buttonState[id].action }, SoundFile: buttonState[id].file },
+                Appearance: { BgColor: buttonState[id].bgColor },
                 MidiMapping: { Note: buttonState[id].midiNote }
             });
         });
 
-        // Send to Backend
         try {
             await fetch('/api/save-profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ profileName: currentProfile, data: profileData })
             });
-            console.log("[TapTone] Profile Saved Successfully!");
+            console.log("[TapTone] Profile Saved.");
         } catch (err) {
             console.error("Failed to save profile:", err);
         }
 
-        // Reset UI
         document.body.classList.remove('edit-mode');
         btnSettings.innerText = "⚙️ Edit Settings";
         btnSettings.classList.remove('save-mode');
@@ -159,5 +252,5 @@ btnSettings.addEventListener('click', async () => {
     }
 });
 
-// Init UI
+// INITIALIZE
 generateGrid();
