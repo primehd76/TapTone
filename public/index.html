@@ -7,20 +7,90 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="play-mode-container">
-        <!-- Header: Page Indicator & Settings Button -->
-        <div class="top-bar">
-            <span id="page-indicator">Page 1 / 5</span>
-            <button id="btn-settings">⚙️ Edit Settings</button>
-        </div>
-
-        <!-- Wrapper baru untuk centering grid -->
-        <div class="main-content">
-            <!-- 5x3 Button Grid Container -->
-            <div class="grid-container" id="sound-grid">
-                <!-- Buttons will be generated dynamically via JavaScript -->
+    <div id="app-wrapper">
+        <!-- PANEL KIRI (Audio Library & Profiles) -->
+        <aside id="sidebar-left" class="panel">
+            <div class="panel-header">
+                <h3>Library & Profiles</h3>
             </div>
-        </div>
+            <div class="panel-content">
+                <label>Active Profile:</label>
+                <select id="profile-select">
+                    <option value="default.xml">Default (Read-Only)</option>
+                    <option value="event_podcast.xml">Event Podcast</option>
+                </select>
+                <hr>
+                <div class="library-header">
+                    <h4>Sound Files</h4>
+                    <button id="btn-upload-sound" class="action-btn">+ Upload</button>
+                </div>
+                <!-- Tempat list audio yang bisa di drag & drop -->
+                <ul id="audio-list" class="file-list">
+                    <li draggable="true" class="file-item">ba-dum-tss.wav</li>
+                    <li draggable="true" class="file-item">laugh_track.wav</li>
+                    <li draggable="true" class="file-item is-playing-list">countdown.wav</li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- AREA UTAMA (Top Bar + Grid + Bottom Panel) -->
+        <main id="main-area">
+            <div class="top-bar">
+                <span id="page-indicator">Page 1 / 5</span>
+                <button id="btn-settings">⚙️ Edit Settings</button>
+            </div>
+
+            <div class="main-content">
+                <div class="grid-container" id="sound-grid">
+                    <!-- JavaScript akan men-generate 15 tombol di sini -->
+                </div>
+            </div>
+
+            <!-- PANEL BAWAH (Button Configuration) -->
+            <section id="panel-bottom" class="panel">
+                <div class="config-grid">
+                    <!-- Kolom 1: Basic Info -->
+                    <div class="config-col">
+                        <h4>Button Config <span id="selected-btn-id">(None)</span></h4>
+                        <label>Button Name:</label>
+                        <input type="text" id="input-btn-name" placeholder="Enter name...">
+                        <label>Action Type:</label>
+                        <select id="select-action-type">
+                            <option value="play_sound">Play Sound</option>
+                            <option value="stop_all">Stop All Sounds</option>
+                            <option value="prev_page">Previous Page</option>
+                            <option value="next_page">Next Page</option>
+                            <option value="blank">Blank / None</option>
+                        </select>
+                    </div>
+
+                    <!-- Kolom 2: Appearance -->
+                    <div class="config-col">
+                        <h4>Appearance</h4>
+                        <label>Display Mode:</label>
+                        <select id="select-display-mode">
+                            <option value="text">Text Only</option>
+                            <option value="image">Image Background</option>
+                        </select>
+                        <label>Background Color:</label>
+                        <input type="color" id="input-bg-color" value="#2a2d3e">
+                        <button id="btn-upload-img" class="action-btn">Upload Image (Max 500px)</button>
+                    </div>
+
+                    <!-- Kolom 3: Audio & MIDI -->
+                    <div class="config-col">
+                        <h4>Audio & Hardware</h4>
+                        <label>Sound File (Autocomplete / Drop):</label>
+                        <input type="text" id="input-sound-file" placeholder="Drag file here or type...">
+                        <label>MIDI Assignment:</label>
+                        <div class="midi-group">
+                            <input type="text" id="input-midi" placeholder="Click to assign..." readonly>
+                            <button id="btn-clear-midi" class="action-btn danger">Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <script src="app.js"></script>
