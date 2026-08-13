@@ -417,6 +417,22 @@ document.getElementById('input-font-hex').addEventListener('input', (e) => {
     if (!activeConfigId) return; document.getElementById('input-font-color').value = e.target.value;
     buttonState[activePage][activeConfigId].fontColor = e.target.value; document.getElementById(`btn_${activeConfigId}`).style.color = e.target.value;
 });
+
+// BUTTON RESET CONFIG
+document.getElementById('btn-reset-button').addEventListener('click', () => {
+    if (!activeConfigId) return;
+    if (!confirm("Reset this button to default empty state?")) return;
+    
+    buttonState[activePage][activeConfigId] = { 
+        name: "Empty", action: "blank", file: "", midiNote: "", bgColor: "#2a2d3e", fontColor: "#ffffff", displayMode: "text", icon: "🔥" 
+    };
+    
+    renderGrid();
+    openConfigForButton(activeConfigId, activePage); // Re-open config to refresh inputs
+    showToast("Button reset to default.");
+});
+
+// Clear Handlers
 document.getElementById('btn-clear-sound').addEventListener('click', () => {
     if (!activeConfigId) return; buttonState[activePage][activeConfigId].file = ""; buttonState[activePage][activeConfigId].action = "blank";
     document.getElementById('input-sound-file').value = ""; document.getElementById('select-action-type').value = "blank";
@@ -454,7 +470,7 @@ btnSettings.addEventListener('click', async () => {
         // EXIT & SAVE
         if (currentProfile === 'default.xml') {
             let newName = prompt("Default profile is read-only. Enter new profile name to Save As:");
-            if (!newName) return; // Batalkan save jika user klik cancel
+            if (!newName) return; 
             currentProfile = newName.trim() + '.xml';
             document.getElementById('current-profile-name').innerText = currentProfile.replace('.xml', '');
         }
@@ -463,7 +479,7 @@ btnSettings.addEventListener('click', async () => {
         btnSettings.innerText = "Saving...";
         await saveProfileToAPI(currentProfile);
         
-        await fetchLibrary(); // Refresh data supaya profile baru masuk list
+        await fetchLibrary(); 
         profileSelect.value = currentProfile;
         
         document.body.classList.remove('edit-mode');

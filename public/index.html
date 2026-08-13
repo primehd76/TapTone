@@ -61,7 +61,12 @@
             <section id="panel-bottom" class="panel">
                 <div class="config-grid">
                     <div class="config-col">
-                        <h4>Button Config <span id="selected-btn-id">(None)</span></h4>
+                        <!-- TAMBAHAN TOMBOL RESET DI SINI -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="margin-bottom: 0;">Button Config <span id="selected-btn-id">(None)</span></h4>
+                            <button id="btn-reset-button" class="action-btn danger" style="padding: 4px 8px; font-size: 11px;">Reset Button</button>
+                        </div>
+                        
                         <label>Button Name:</label>
                         <input type="text" id="input-btn-name" placeholder="Enter name...">
                         <label>Action Type:</label>
